@@ -1,8 +1,7 @@
 <script>
   import { loginDotNet } from "../api/api.js";
-  import { auth } from "../stores/auth.js";
 
-  let email = "";
+  let username = "";
   let password = "";
   let loading = false;
   let error = "";
@@ -12,7 +11,7 @@
     error = "";
     loading = true;
     try {
-      await loginDotNet(email, password); // setAuth ocurre dentro
+      await loginDotNet(username, password); // setAuth ocurre dentro
       // Redirige a donde corresponda
       window.location.assign("/");
     } catch (err) {
@@ -27,8 +26,8 @@
   <h1>Iniciar sesión</h1>
 
   <label>
-    Correo
-    <input type="email" bind:value={email} required />
+    usuario
+    <input type="username" bind:value={username} required />
   </label>
 
   <label>

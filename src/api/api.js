@@ -26,11 +26,11 @@ async function request(base, endpoint, options = {}) {
 }
 
 // ---- .NET AUTH
-export async function loginDotNet(email, password) {
+export async function loginDotNet(username, password) {
   // /api/users/login devuelve el JWT como string (no JSON)
   const token = await request(MT_BASE, "/api/users/login", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ username, password }),
   });
 
   // guarda token y trae perfil
