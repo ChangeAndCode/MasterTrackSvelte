@@ -1,44 +1,64 @@
 // src/api/api.js
 import { getToken, setAuth } from "../stores/auth.js";
 
-const BASE_URL = "/api"; // pasa por el proxy de Vite para evitar CORS:contentReference[oaicite:1]{index=1}
+const MT_BASE = (import.meta.env.VITE_MTAPI_BASE || "").replace(/\/$/, "");
+const CRM_BASE = "/api"; // tu proxy actual al CRM (lo dejas tal cual)
 
-async function request(endpoint, options = {}) {
+// ---- GENÉRICO (con token si existe)
+async function request(base, endpoint, options = {}) {
   const token = getToken();
   const headers = {
     "Content-Type": "application/json",
     ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
   };
+  const res = await fetch(`${base}${endpoint}`, { ...options, headers });
 
-  const res = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
-  const isJson = res.headers.get("content-type")?.includes("application/json");
-  const data = isJson ? await res.json() : null;
+  const ct = res.headers.get("content-type") || "";
+  const isJson = ct.includes("application/json");
+  const data = isJson ? await res.json() : await res.text();
 
-  if (!res.ok) {
-    const msg = data?.message || `${res.status} ${res.statusText}`;
-    throw new Error(msg);
-  }
+  if (!res.ok)
+    throw new Error(
+      typeof data === "string" ? data : data?.message || `HTTP ${res.status}`
+    );
   return data;
 }
 
-// --- ENDPOINTS ---
-export async function login(username, password) {
-  const data = await request("/Auth/login", {
+// ---- .NET AUTH
+export async function loginDotNet(email, password) {
+  // /api/users/login devuelve el JWT como string (no JSON)
+  const token = await request(MT_BASE, "/api/users/login", {
     method: "POST",
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ email, password }),
   });
-  // La API devuelve { token, user: {...} } según tu Postman.
-  setAuth(data.token, data.user ?? null);
-  return data;
+
+  // guarda token y trae perfil
+  try {
+    const me = await request(MT_BASE, "/api/users/me", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setAuth(token, me);
+  } catch {
+    setAuth(token, null);
+  }
+  return token;
 }
 
+// (si ya usas el CRM, dejas estos helpers)
 export function searchCustomers(q, take = 10) {
-  return request(`/Customers/search?q=${encodeURIComponent(q)}&take=${take}`);
+  return request(
+    CRM_BASE,
+    `/Customers/search?q=${encodeURIComponent(q)}&take=${take}`
+  );
 }
 export function getInstallers(take = 100) {
-  return request(`/Installers/installers?take=${take}`);
+  return request(CRM_BASE, `/Installers/installers?take=${take}`);
 }
 export function searchInstallers(q, take = 10) {
-  return request(`/Installers/search?q=${encodeURIComponent(q)}&take=${take}`);
+  return request(
+    CRM_BASE,
+    `/Installers/search?q=${encodeURIComponent(q)}&take=${take}`
+  );
 }

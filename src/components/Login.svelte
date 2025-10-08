@@ -1,8 +1,8 @@
 <script>
-  import { login } from "../api/api.js";
+  import { loginDotNet } from "../api/api.js";
   import { auth } from "../stores/auth.js";
 
-  let username = "";
+  let email = "";
   let password = "";
   let loading = false;
   let error = "";
@@ -12,36 +12,29 @@
     error = "";
     loading = true;
     try {
-      await login(username, password); // setAuth ocurre dentro
-      // listo: auth store ya tiene el token + user
+      await loginDotNet(email, password); // setAuth ocurre dentro
+      // Redirige a donde corresponda
+      window.location.assign("/");
     } catch (err) {
-      error = err.message || "No se pudo iniciar sesión";
+      error = err?.message || "No se pudo iniciar sesión";
     } finally {
       loading = false;
     }
   }
 </script>
 
-<form class="login" on:submit={onSubmit}>
-  <h2>Iniciar sesión</h2>
+<form on:submit|preventDefault={onSubmit} class="login">
+  <h1>Iniciar sesión</h1>
 
-  <label>Usuario</label>
-  <input
-    type="text"
-    bind:value={username}
-    placeholder="usuario"
-    autocomplete="username"
-    required
-  />
+  <label>
+    Correo
+    <input type="email" bind:value={email} required />
+  </label>
 
-  <label>Contraseña</label>
-  <input
-    type="password"
-    bind:value={password}
-    placeholder="contraseña"
-    autocomplete="current-password"
-    required
-  />
+  <label>
+    Contraseña
+    <input type="password" bind:value={password} required />
+  </label>
 
   {#if error}<p class="error">{error}</p>{/if}
 
