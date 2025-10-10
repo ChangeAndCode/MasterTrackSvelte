@@ -1,49 +1,83 @@
 // src/api/api.js
-import { getToken, setAuth } from "../stores/auth.js";
+import { setAuth } from "../stores/auth.js";
 
 const MT_BASE = (import.meta.env.VITE_MTAPI_BASE || "").replace(/\/$/, "");
 const CRM_BASE = "/api"; // tu proxy actual al CRM (lo dejas tal cual)
 
 // ---- GENÉRICO (con token si existe)
-async function request(base, endpoint, options = {}) {
-  const token = getToken();
+export async function request(base, endpoint, options = {}) {
+  const token = localStorage.getItem("mt_token");
   const headers = {
     "Content-Type": "application/json",
     ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
   };
   const res = await fetch(`${base}${endpoint}`, { ...options, headers });
-
   const ct = res.headers.get("content-type") || "";
+  const raw = await res.text();
   const isJson = ct.includes("application/json");
-  const data = isJson ? await res.json() : await res.text();
-
+  let data = raw;
+  if (isJson && raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {}
+  }
   if (!res.ok)
     throw new Error(
-      typeof data === "string" ? data : data?.message || `HTTP ${res.status}`
+      (typeof data === "string" ? data : data?.message) || `HTTP ${res.status}`
     );
   return data;
 }
 
+export function getMe() {
+  return request(MT_BASE, "/api/users/me");
+}
 // ---- .NET AUTH
+
+export async function registerUser({ username, email, password, role }) {
+  const MT_BASE = (import.meta.env.VITE_MTAPI_BASE || "").replace(/\/$/, "");
+  const res = await fetch(`${MT_BASE}/api/users/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, email, password, role })
+  });
+  const ct = res.headers.get("content-type") || "";
+  const data = ct.includes("application/json") ? await res.json() : await res.text();
+  if (!res.ok) throw new Error(typeof data === "string" ? data : data?.message || `HTTP ${res.status}`);
+  return data; // { message, id, username, email, role }
+}
+
 export async function loginDotNet(username, password) {
-  // /api/users/login devuelve el JWT como string (no JSON)
-  const token = await request(MT_BASE, "/api/users/login", {
+  const data = await request(MT_BASE, "/api/users/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
 
-  // guarda token y trae perfil
+  const token = data && typeof data === "object" ? data.token : data;
+  if (!token) throw new Error("Respuesta de login sin token");
+
+  localStorage.setItem("mt_token", token);
+
+  // fallback al 'user' del login por si /me falla
+  let me = null;
   try {
-    const me = await request(MT_BASE, "/api/users/me", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    setAuth(token, me);
+    me = await request(MT_BASE, "/api/users/me");
   } catch {
-    setAuth(token, null);
+    const u = data?.user;
+    if (u) {
+      me = { username: u.username, email: u.email, role: u.role };
+    }
   }
-  return token;
+
+  // guarda también en localStorage para persistencia
+  if (me) localStorage.setItem("mt_me", JSON.stringify(me));
+
+  // actualiza el store
+  try {
+    setAuth(token, me);
+  } catch {}
+
+  return { token, me };
 }
 
 // (si ya usas el CRM, dejas estos helpers)

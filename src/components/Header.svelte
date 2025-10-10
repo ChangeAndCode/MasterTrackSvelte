@@ -21,7 +21,7 @@
       <!-- Navegación -->
       <nav class="nav">
         {#each navItems as item}
-          <a href="#" class="nav-link">{item}</a>
+          <a href="https://www.google.com/" class="nav-link">{item}</a>
         {/each}
       </nav>
 
@@ -31,7 +31,7 @@
           <input type="text" placeholder="Buscar..." />
           <span class="search-icon">🔍</span>
         </div>
-        <a href="#" class="btn btn-primary">Portal para CLIENTES</a>
+        <a href="https://www.google.com/" class="btn btn-primary">Portal para CLIENTES</a>
       </div>
     </div>
   </div>

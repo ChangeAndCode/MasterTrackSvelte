@@ -1,25 +1,27 @@
 // src/stores/auth.js
-import { writable, get } from "svelte/store";
+import { writable } from "svelte/store";
 
-const saved = JSON.parse(localStorage.getItem("auth") || "null");
+const savedToken = localStorage.getItem("mt_token");
+const savedMe = JSON.parse(localStorage.getItem("mt_me") || "null");
 
-export const auth = writable(
-  saved ?? { token: null, user: null, isAuthenticated: false }
-);
-
-auth.subscribe((val) => {
-  localStorage.setItem("auth", JSON.stringify(val));
+export const auth = writable({
+  isAuthenticated: !!savedToken,
+  token: savedToken || null,
+  me: savedMe || null,
 });
 
-export function setAuth(token, user) {
-  auth.set({ token, user, isAuthenticated: !!token });
+export function setAuth(token, me) {
+  if (token) localStorage.setItem("mt_token", token);
+  else localStorage.removeItem("mt_token");
+
+  if (me) localStorage.setItem("mt_me", JSON.stringify(me));
+  else localStorage.removeItem("mt_me");
+
+  auth.set({ isAuthenticated: !!token, token: token || null, me: me || null });
 }
 
 export function clearAuth() {
-  auth.set({ token: null, user: null, isAuthenticated: false });
-}
-
-export function getToken() {
-  const a = get(auth);
-  return a?.token || null;
+  localStorage.removeItem("mt_token");
+  localStorage.removeItem("mt_me");
+  auth.set({ isAuthenticated: false, token: null, me: null });
 }
