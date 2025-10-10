@@ -128,3 +128,9 @@ export function getRoleColor(roleKey) {
 export function getRoleName(roleKey) {
   return roles[roleKey]?.name || 'Desconocido';
 }
+
+export function canEditStep(stepAspect, userRoleName) {
+  const key = normalizeRoleKey(userRoleName);
+  const role = roles[key];
+  return !!(role && role.permissions && role.permissions.includes(stepAspect));
+}

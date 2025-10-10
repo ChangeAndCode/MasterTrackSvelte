@@ -1,65 +1,76 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { currentRole, canEditStep, getRoleColor } from '../stores/roleStore.js';
-  
-  export let checklistData;
+  import { createEventDispatcher } from "svelte";
+  import { auth } from "../stores/auth.js";
+  import { getRoleColorByName, normalizeRoleKey } from "../stores/roleStore.js";
+
+  // Datos que te pasa el padre (el checklist renderizable)
+  export let checklistData = [];
+  // Lista que viene del backend con los pasos que este usuario puede editar
+  export let editableStepKeys = []; // p.ej. ["ALMACÉN", "CALIDAD", ...]
+
   const dispatch = createEventDispatcher();
 
+  // Usuario/rol actual desde el store de auth
+  $: me = $auth?.me || null;
+  $: roleName = me?.role || "";                         // "Administrador", "Almacén", etc.
+  $: roleKey = normalizeRoleKey(roleName);              // ADMIN, ALMACEN, ...
+  $: isAdmin = roleKey === "ADMIN";
+  $: roleColor = getRoleColorByName(roleName);
+
   function handleUpdate(id, field, value) {
-    dispatch('update', { id, field, value });
+    dispatch("update", { id, field, value });
   }
 
   function handleToggle(id) {
-    dispatch('toggle', { id });
+    dispatch("toggle", { id });
   }
 
+  // función para saber si un aspecto es editable para el usuario actual
+  const canEditAspect = (aspecto) => isAdmin || editableStepKeys.includes(aspecto);
+
   function getCalidadFields(aspecto) {
-    switch(aspecto) {
-      case 'GENERAR ORDEN DE COMPRA':
+    switch (aspecto) {
+      case "GENERAR ORDEN DE COMPRA":
         return [
-          { key: 'datosCte', label: 'DATOS CTE', type: 'checkbox' },
-          { key: 'checklist', label: 'CHECKLIST', type: 'checkbox' },
-          { key: 'comodato', label: 'COMODATO', type: 'checkbox' },
-          { key: 'garantia', label: 'GARANTIA', type: 'checkbox' },
-          { key: 'cortesia', label: 'CORTESIA', type: 'checkbox' },
-          { key: 'demo', label: 'DEMO', type: 'checkbox' },
-          { key: 'precioRenta', label: 'PRECIO RENTA', type: 'checkbox' },
-          { key: 'folio', label: 'FOLIO', type: 'text' },
-          { key: 'numProgServ', label: '# DE PROG. SERV', type: 'text' }
+          { key: "datosCte", label: "DATOS CTE", type: "checkbox" },
+          { key: "checklist", label: "CHECKLIST", type: "checkbox" },
+          { key: "comodato", label: "COMODATO", type: "checkbox" },
+          { key: "garantia", label: "GARANTIA", type: "checkbox" },
+          { key: "cortesia", label: "CORTESIA", type: "checkbox" },
+          { key: "demo", label: "DEMO", type: "checkbox" },
+          { key: "precioRenta", label: "PRECIO RENTA", type: "checkbox" },
+          { key: "folio", label: "FOLIO", type: "text" },
+          { key: "numProgServ", label: "# DE PROG. SERV", type: "text" }
         ];
-      case 'COORDINACION DE SERVICIOS':
+      case "COORDINACION DE SERVICIOS":
         return [
-          { key: 'validado', label: 'VALIDADO', type: 'checkbox' },
-          { key: 'valido', label: 'VÁLIDO', type: 'checkbox' }
+          { key: "validado", label: "VALIDADO", type: "checkbox" },
+          { key: "valido", label: "VÁLIDO", type: "checkbox" }
         ];
-      case 'PROGRAMADORES':
+      case "PROGRAMADORES":
         return [
-          { key: 'ids', label: "ID'S", type: 'checkbox' },
-          { key: 'valido', label: 'VÁLIDO', type: 'checkbox' }
+          { key: "ids", label: "ID'S", type: "checkbox" },
+          { key: "valido", label: "VÁLIDO", type: "checkbox" }
         ];
-      case 'ALMACÉN':
+      case "ALMACÉN":
         return [
-          { key: 'matCompleto', label: 'MAT. COMPLETO', type: 'checkbox' },
-          { key: 'numVale', label: '# DE VALE', type: 'text' },
-          { key: 'hojaSalida', label: '# HOJA SALIDA', type: 'checkbox' }
+          { key: "matCompleto", label: "MAT. COMPLETO", type: "checkbox" },
+          { key: "numVale", label: "# DE VALE", type: "text" },
+          { key: "hojaSalida", label: "# HOJA SALIDA", type: "checkbox" }
         ];
-      case 'CALIDAD':
-        return [
-          { key: 'observaciones', label: 'OBSERVACIONES:', type: 'textarea' }
-        ];
-      case 'TÉCNICO INSTALADOR':
+      case "CALIDAD":
+        return [{ key: "observaciones", label: "OBSERVACIONES:", type: "textarea" }];
+      case "TÉCNICO INSTALADOR":
         return [];
-      case 'SOPORTE TÉCNICO':
+      case "SOPORTE TÉCNICO":
         return [
-          { key: 'procesada', label: 'PROCESADA', type: 'checkbox' },
-          { key: 'pruebas', label: 'PRUEBAS', type: 'checkbox' },
-          { key: 'notificacionCliente', label: 'NOTIFICACION AL CLIENTE', type: 'checkbox' }
+          { key: "procesada", label: "PROCESADA", type: "checkbox" },
+          { key: "pruebas", label: "PRUEBAS", type: "checkbox" },
+          { key: "notificacionCliente", label: "NOTIFICACION AL CLIENTE", type: "checkbox" }
         ];
-      case 'SALIDA DE MATERIAL (INSTALACION DE STOCK)':
-        return [
-          { key: 'hojaSalida', label: '# HOJA SALIDA', type: 'text' }
-        ];
-      case 'FACTURACIÓN':
+      case "SALIDA DE MATERIAL (INSTALACION DE STOCK)":
+        return [{ key: "hojaSalida", label: "# HOJA SALIDA", type: "text" }];
+      case "FACTURACIÓN":
         return [];
       default:
         return [];
@@ -80,76 +91,65 @@
     </thead>
     <tbody>
       {#each checklistData as item}
-        {@const canEdit = canEditStep(item.aspecto, $currentRole)}
-        {@const isEditable = canEdit || $currentRole === 'ADMIN'}
+        {@const isEditable = canEditAspect(item.aspecto)}
+
         <tr class="table-row {item.completado ? 'completed' : ''} {!isEditable ? 'readonly' : ''}">
           <td class="status-cell">
             {#if isEditable}
-              <button 
+              <button
                 class="status-btn {item.completado ? 'completed' : ''}"
                 on:click={() => handleToggle(item.id)}
-                title={item.completado ? 'Marcar como pendiente' : 'Marcar como completado'}
-              >
-                {#if item.completado}
-                  ✓
-                {:else}
-                  ○
-                {/if}
+                title={item.completado ? 'Marcar como pendiente' : 'Marcar como completado'}>
+                {#if item.completado} ✓ {:else} ○ {/if}
               </button>
             {:else}
               <div class="status-indicator {item.completado ? 'completed' : ''}">
-                {#if item.completado}
-                  ✓
-                {:else}
-                  ○
-                {/if}
+                {#if item.completado} ✓ {:else} ○ {/if}
               </div>
             {/if}
           </td>
-          
+
           <td class="aspecto-cell">
             <strong>{item.aspecto}</strong>
             {#if item.completado}
               <div class="completion-badge">Completado</div>
             {/if}
             {#if !isEditable}
-              <div class="role-badge" style="background-color: {getRoleColor($currentRole)}">
+              <div class="role-badge" style="background-color:{roleColor}">
                 Solo lectura
               </div>
             {/if}
           </td>
-          
+
           <td class="signature-cell">
             {#if isEditable}
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={item.firmaResponsable}
-                on:input={(e) => handleUpdate(item.id, 'firmaResponsable', e.target.value)}
+                on:input={(e) => handleUpdate(item.id, "firmaResponsable", e.target.value)}
                 placeholder="Firma responsable"
-                class={item.firmaResponsable ? 'filled' : ''}
-              />
+                class={item.firmaResponsable ? 'filled' : ''} />
             {:else}
               <div class="readonly-field {item.firmaResponsable ? 'filled' : ''}">
                 {item.firmaResponsable || 'No asignado'}
               </div>
             {/if}
           </td>
-          
+
           <td class="date-cell">
             {#if isEditable}
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={item.fecha}
-                on:input={(e) => handleUpdate(item.id, 'fecha', e.target.value)}
-                class={item.fecha ? 'filled' : ''}
-              />
+                on:input={(e) => handleUpdate(item.id, "fecha", e.target.value)}
+                class={item.fecha ? 'filled' : ''} />
             {:else}
               <div class="readonly-field {item.fecha ? 'filled' : ''}">
                 {item.fecha ? new Date(item.fecha).toLocaleDateString('es-ES') : 'No asignada'}
               </div>
             {/if}
           </td>
-          
+
           <td class="calidad-cell">
             <div class="calidad-fields">
               {#each getCalidadFields(item.aspecto) as field}
@@ -157,28 +157,25 @@
                   <label>{field.label}</label>
                   {#if isEditable}
                     {#if field.type === 'checkbox'}
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={item.calidad[field.key]}
                         on:change={(e) => handleUpdate(item.id, `calidad.${field.key}`, e.target.checked)}
-                        class="calidad-checkbox"
-                      />
+                        class="calidad-checkbox" />
                     {:else if field.type === 'text'}
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={item.calidad[field.key] || ''}
                         on:input={(e) => handleUpdate(item.id, `calidad.${field.key}`, e.target.value)}
                         placeholder={field.label}
-                        class={item.calidad[field.key] ? 'filled' : ''}
-                      />
+                        class={item.calidad[field.key] ? 'filled' : ''} />
                     {:else if field.type === 'textarea'}
-                      <textarea 
+                      <textarea
                         value={item.calidad[field.key] || ''}
                         on:input={(e) => handleUpdate(item.id, `calidad.${field.key}`, e.target.value)}
                         placeholder={field.label}
                         rows="2"
-                        class={item.calidad[field.key] ? 'filled' : ''}
-                      ></textarea>
+                        class={item.calidad[field.key] ? 'filled' : ''}></textarea>
                     {/if}
                   {:else}
                     <div class="readonly-field {item.calidad[field.key] ? 'filled' : ''}">

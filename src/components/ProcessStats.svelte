@@ -1,33 +1,44 @@
 <script>
-  import { currentRole, canEditStep, getRoleColor, getRoleName } from '../stores/roleStore.js';
-  
-  export let checklistData;
-  export let clientData;
+ import { auth } from "../stores/auth.js";
+  import { getRoleColorByName, getRoleLabelByName, normalizeRoleKey } from "../stores/roleStore.js";
 
-  // Calcular estadísticas
-  $: totalSteps = checklistData.length;
-  $: completedSteps = checklistData.filter(item => item.completado).length;
-  $: pendingSteps = totalSteps - completedSteps;
-  $: progressPercentage = Math.round((completedSteps / totalSteps) * 100);
+ // Props del padre
+  export let checklistData = [];     // array de pasos { aspecto, completado, calidad, ... }
+  export let clientData = {};        // info de cabecera (cliente, fecha, etc.)
+  export let editableStepKeys = [];  // lista de aspectos que el usuario puede editar (del backend)
 
-  // Obtener pasos críticos (los que tienen más campos de calidad)
-  $: criticalSteps = checklistData.filter(item => 
-    Object.keys(item.calidad).length > 2
-  );
+// Rol actual desde auth
+  $: me       = $auth?.me || null;
+  $: roleName = me?.role || "";                  // "Administrador", "Almacén", ...
+  $: roleKey  = normalizeRoleKey(roleName);      // ADMIN, ALMACEN, ...
+  $: roleColor = getRoleColorByName(roleName);
+  $: roleLabel = getRoleLabelByName(roleName);
+  $: isAdmin  = roleKey === "ADMIN";
 
-  // Obtener pasos completados críticos
+// --- Estadísticas generales ---
+  $: totalSteps        = checklistData.length;
+  $: completedSteps    = checklistData.filter(item => item.completado).length;
+  $: pendingSteps      = totalSteps - completedSteps;
+  $: progressPercentage = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+
+  // Pasos "críticos": arbitrario = más de 2 campos en calidad
+  $: criticalSteps     = checklistData.filter(item => Object.keys(item.calidad || {}).length > 2);
   $: criticalCompleted = criticalSteps.filter(item => item.completado).length;
 
-  // Calcular tiempo estimado (asumiendo 30 min por paso)
-  $: estimatedTime = pendingSteps * 30;
-  $: estimatedHours = Math.floor(estimatedTime / 60);
+  // Tiempo estimado (30min por paso pendiente)
+  $: estimatedTime    = pendingSteps * 30;
+  $: estimatedHours   = Math.floor(estimatedTime / 60);
   $: estimatedMinutes = estimatedTime % 60;
 
-  // Estadísticas específicas del rol
-  $: userSteps = checklistData.filter(item => canEditStep(item.aspecto, $currentRole));
-  $: userCompletedSteps = userSteps.filter(item => item.completado).length;
-  $: userProgressPercentage = userSteps.length > 0 ? Math.round((userCompletedSteps / userSteps.length) * 100) : 0;
-  $: userPendingSteps = userSteps.length - userCompletedSteps;
+  // --- Estadísticas del usuario (rol) ---
+  const canEditAspect = (aspecto) => isAdmin || editableStepKeys.includes(aspecto);
+
+  $: userSteps            = checklistData.filter(item => canEditAspect(item.aspecto));
+  $: userCompletedSteps   = userSteps.filter(item => item.completado).length;
+  $: userProgressPercentage = userSteps.length > 0
+      ? Math.round((userCompletedSteps / userSteps.length) * 100)
+      : 0;
+  $: userPendingSteps     = userSteps.length - userCompletedSteps;
 </script>
 
 <div class="stats-container">
@@ -43,16 +54,16 @@
     </div>
 
     <!-- Progreso del usuario -->
-    <div class="stat-card user-progress" style="border-color: {getRoleColor($currentRole)}">
-      <div class="stat-icon" style="background-color: {getRoleColor($currentRole)}">👤</div>
+    <div class="stat-card user-progress" style="border-color:{roleColor}">
+      <div class="stat-icon" style="background-color:{roleColor}">👤</div>
       <div class="stat-content">
-        <h3>Mi Progreso ({getRoleName($currentRole)})</h3>
+        <h3>Mi Progreso ({roleLabel})</h3>
         <div class="stat-value">{userProgressPercentage}%</div>
         <div class="stat-detail">{userCompletedSteps} de {userSteps.length} pasos</div>
       </div>
     </div>
 
-    <!-- Pasos pendientes del usuario -->
+    <!-- Pendientes del usuario -->
     <div class="stat-card">
       <div class="stat-icon">⏳</div>
       <div class="stat-content">
@@ -95,24 +106,19 @@
         <h3>Próximo Paso</h3>
         <div class="stat-value">
           {#if userPendingSteps > 0}
-            {userSteps.find(item => !item.completado)?.aspecto.split(' ').slice(0, 2).join(' ') || 'N/A'}
+            {userSteps.find(item => !item.completado)?.aspecto.split(" ").slice(0, 2).join(" ") || "N/A"}
           {:else}
             ¡Completado!
           {/if}
         </div>
         <div class="stat-detail">
-          {#if userPendingSteps > 0}
-            Pendiente
-          {:else}
-            Todos completados
-          {/if}
+          {#if userPendingSteps > 0} Pendiente {:else} Todos completados {/if}
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Información del cliente -->
-  {#if clientData.cliente}
+  {#if clientData?.cliente}
     <div class="client-info-card">
       <h3>📋 Información del Cliente</h3>
       <div class="client-details">
@@ -120,18 +126,18 @@
           <strong>Cliente:</strong> {clientData.cliente}
         </div>
         <div class="client-field">
-          <strong>Fecha:</strong> {new Date(clientData.fecha).toLocaleDateString('es-ES')}
+          <strong>Fecha:</strong> {clientData.fecha ? new Date(clientData.fecha).toLocaleDateString("es-ES") : "—"}
         </div>
         <div class="client-field">
-          <strong>Estado:</strong> 
+          <strong>Estado:</strong>
           <span class="status-badge {progressPercentage === 100 ? 'completed' : progressPercentage > 50 ? 'in-progress' : 'pending'}">
-            {progressPercentage === 100 ? 'Completado' : progressPercentage > 50 ? 'En Progreso' : 'Pendiente'}
+            {progressPercentage === 100 ? "Completado" : progressPercentage > 50 ? "En Progreso" : "Pendiente"}
           </span>
         </div>
         <div class="client-field">
-          <strong>Mi Rol:</strong> 
-          <span class="role-badge" style="background-color: {getRoleColor($currentRole)}">
-            {getRoleName($currentRole)}
+          <strong>Mi Rol:</strong>
+          <span class="role-badge" style="background-color:{roleColor}">
+            {roleLabel}
           </span>
         </div>
       </div>
