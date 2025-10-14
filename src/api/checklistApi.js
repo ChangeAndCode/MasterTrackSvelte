@@ -75,3 +75,9 @@ export async function getClientChecklists(clientId) {
     { method: "GET" }
   );
 }
+
+export async function getChecklistDetail(id) {
+  return request(BASE, `/api/checklists/${encodeURIComponent(id)}`, {
+    method: "GET",
+  });
+}

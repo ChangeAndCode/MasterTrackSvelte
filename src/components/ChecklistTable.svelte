@@ -3,31 +3,62 @@
   import { auth } from "../stores/auth.js";
   import { getRoleColorByName, normalizeRoleKey } from "../stores/roleStore.js";
 
-  // Datos que te pasa el padre (el checklist renderizable)
-  export let checklistData = [];
-  // Lista que viene del backend con los pasos que este usuario puede editar
-  export let editableStepKeys = []; // p.ej. ["ALMACÉN", "CALIDAD", ...]
+  // ===== Props del padre =====
+  export let checklistData = [];           // Tu estructura visual (se renderiza SIEMPRE)
+  export let editableStepKeys = [];        // StepKeys reales desde backend (p.ej. ["ALMACEN","TECNICO",...])
+  export let checklistId = null;           // null => sin orden seleccionada
+  export let folio = null;
+  export let steps = [];                   // [{ stepKey, status, data }] (aún no mapeado a campos visuales)
+  export let stats = { totalSteps: 0, done: 0, myPending: 0 };
+  export let loadingDetail = false;        // Para bloquear inputs durante carga
 
   const dispatch = createEventDispatcher();
 
-  // Usuario/rol actual desde el store de auth
+  // ===== Usuario/rol actual =====
   $: me = $auth?.me || null;
-  $: roleName = me?.role || "";                         // "Administrador", "Almacén", etc.
+  $: roleName = me?.role || "";                         // "Administrador", "Almacén", ...
   $: roleKey = normalizeRoleKey(roleName);              // ADMIN, ALMACEN, ...
   $: isAdmin = roleKey === "ADMIN";
   $: roleColor = getRoleColorByName(roleName);
 
+  // ===== Eventos hacia el padre (conservamos tu API) =====
   function handleUpdate(id, field, value) {
     dispatch("update", { id, field, value });
   }
-
   function handleToggle(id) {
     dispatch("toggle", { id });
   }
 
-  // función para saber si un aspecto es editable para el usuario actual
-  const canEditAspect = (aspecto) => isAdmin || editableStepKeys.includes(aspecto);
+  // ===== Mapa de "texto visual" -> StepKey real del backend =====
+  function aspectoToStepKey(item) {
+    switch (item.aspecto) {
+      case "GENERAR ORDEN DE COMPRA": return "GENERAR_OC";
+      case "COORDINACION DE SERVICIOS": return "COORDINACION";
+      case "PROGRAMADORES": return "PROGRAMADORES";
+      case "ALMACÉN": return "ALMACEN";
+      case "CALIDAD":
+        // En tu tabla hay 2 filas “CALIDAD”. Diferéncialas por id:
+        // id:5 -> CALIDAD_1, id:8 -> CALIDAD_2 (según tu seed local)
+        return item.id === 5 ? "CALIDAD_1" : "CALIDAD_2";
+      case "TÉCNICO INSTALADOR": return "TECNICO";
+      case "SOPORTE TÉCNICO": return "SOPORTE";
+      case "SALIDA DE MATERIAL (INSTALACION DE STOCK)":
+        // Si más adelante defines StepKey propio en backend, cámbialo aquí.
+        // De momento, sin StepKey => solo lectura
+        return null;
+      case "FACTURACIÓN": return "FACTURACION";
+      default: return null;
+    }
+  }
 
+  // ===== Permiso real por fila =====
+  const canEditItem = (item) => {
+    if (isAdmin) return true;
+    const k = aspectoToStepKey(item);
+    return !!k && editableStepKeys.includes(k);
+  };
+
+  // ===== Campos de “Calidad” por aspecto (tu layout actual) =====
   function getCalidadFields(aspecto) {
     switch (aspecto) {
       case "GENERAR ORDEN DE COMPRA":
@@ -79,6 +110,12 @@
 </script>
 
 <div class="checklist-table-container">
+  {#if !checklistId}
+    <div class="badge">Sin orden seleccionada — modo solo visual</div>
+  {:else if folio}
+    <div class="badge">Folio activo: <strong>{folio}</strong></div>
+  {/if}
+
   <table class="checklist-table">
     <thead>
       <tr>
@@ -91,7 +128,7 @@
     </thead>
     <tbody>
       {#each checklistData as item}
-        {@const isEditable = canEditAspect(item.aspecto)}
+        {@const isEditable = canEditItem(item)}
 
         <tr class="table-row {item.completado ? 'completed' : ''} {!isEditable ? 'readonly' : ''}">
           <td class="status-cell">
@@ -99,7 +136,8 @@
               <button
                 class="status-btn {item.completado ? 'completed' : ''}"
                 on:click={() => handleToggle(item.id)}
-                title={item.completado ? 'Marcar como pendiente' : 'Marcar como completado'}>
+                title={item.completado ? 'Marcar como pendiente' : 'Marcar como completado'}
+                disabled={loadingDetail}>
                 {#if item.completado} ✓ {:else} ○ {/if}
               </button>
             {:else}
@@ -115,9 +153,7 @@
               <div class="completion-badge">Completado</div>
             {/if}
             {#if !isEditable}
-              <div class="role-badge" style="background-color:{roleColor}">
-                Solo lectura
-              </div>
+              <div class="role-badge" style="background-color:{roleColor}">Solo lectura</div>
             {/if}
           </td>
 
@@ -128,7 +164,8 @@
                 value={item.firmaResponsable}
                 on:input={(e) => handleUpdate(item.id, "firmaResponsable", e.target.value)}
                 placeholder="Firma responsable"
-                class={item.firmaResponsable ? 'filled' : ''} />
+                class={item.firmaResponsable ? 'filled' : ''}
+                disabled={loadingDetail} />
             {:else}
               <div class="readonly-field {item.firmaResponsable ? 'filled' : ''}">
                 {item.firmaResponsable || 'No asignado'}
@@ -142,7 +179,8 @@
                 type="date"
                 value={item.fecha}
                 on:input={(e) => handleUpdate(item.id, "fecha", e.target.value)}
-                class={item.fecha ? 'filled' : ''} />
+                class={item.fecha ? 'filled' : ''}
+                disabled={loadingDetail} />
             {:else}
               <div class="readonly-field {item.fecha ? 'filled' : ''}">
                 {item.fecha ? new Date(item.fecha).toLocaleDateString('es-ES') : 'No asignada'}
@@ -155,27 +193,31 @@
               {#each getCalidadFields(item.aspecto) as field}
                 <div class="calidad-field">
                   <label>{field.label}</label>
+
                   {#if isEditable}
                     {#if field.type === 'checkbox'}
                       <input
                         type="checkbox"
                         checked={item.calidad[field.key]}
                         on:change={(e) => handleUpdate(item.id, `calidad.${field.key}`, e.target.checked)}
-                        class="calidad-checkbox" />
+                        class="calidad-checkbox"
+                        disabled={loadingDetail} />
                     {:else if field.type === 'text'}
                       <input
                         type="text"
                         value={item.calidad[field.key] || ''}
                         on:input={(e) => handleUpdate(item.id, `calidad.${field.key}`, e.target.value)}
                         placeholder={field.label}
-                        class={item.calidad[field.key] ? 'filled' : ''} />
+                        class={item.calidad[field.key] ? 'filled' : ''}
+                        disabled={loadingDetail} />
                     {:else if field.type === 'textarea'}
                       <textarea
                         value={item.calidad[field.key] || ''}
                         on:input={(e) => handleUpdate(item.id, `calidad.${field.key}`, e.target.value)}
                         placeholder={field.label}
                         rows="2"
-                        class={item.calidad[field.key] ? 'filled' : ''}></textarea>
+                        class={item.calidad[field.key] ? 'filled' : ''}
+                        disabled={loadingDetail}></textarea>
                     {/if}
                   {:else}
                     <div class="readonly-field {item.calidad[field.key] ? 'filled' : ''}">
@@ -202,6 +244,17 @@
     margin: 20px 0;
   }
 
+  .badge {
+    margin: 8px 0 12px;
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #e8f0ff;
+    color: #2b4ea2;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
   .checklist-table {
     width: 100%;
     border-collapse: collapse;
@@ -226,34 +279,15 @@
     vertical-align: top;
   }
 
-  .table-row {
-    transition: all 0.3s ease;
-  }
+  .table-row { transition: all 0.3s ease; }
+  .table-row:hover { background-color: #f8f9fa; }
+  .table-row.completed { background-color: #e8f5e8; }
+  .table-row.readonly { opacity: 0.7; }
+  .table-row.readonly:hover { background-color: #f0f0f0; }
 
-  .table-row:hover {
-    background-color: #f8f9fa;
-  }
-
-  .table-row.completed {
-    background-color: #e8f5e8;
-  }
-
-  .table-row.readonly {
-    opacity: 0.7;
-  }
-
-  .table-row.readonly:hover {
-    background-color: #f0f0f0;
-  }
-
-  .status-cell {
-    width: 8%;
-    text-align: center;
-  }
-
+  .status-cell { width: 8%; text-align: center; }
   .status-btn {
-    width: 30px;
-    height: 30px;
+    width: 30px; height: 30px;
     border: 2px solid var(--border-grey);
     border-radius: 50%;
     background: var(--white);
@@ -261,192 +295,64 @@
     font-size: 16px;
     cursor: pointer;
     transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
   }
-
-  .status-btn:hover {
-    border-color: var(--accent-yellow);
-    color: var(--accent-yellow);
-  }
-
-  .status-btn.completed {
-    background-color: var(--accent-yellow);
-    border-color: var(--accent-yellow);
-    color: var(--white);
-  }
+  .status-btn:hover { border-color: var(--accent-yellow); color: var(--accent-yellow); }
+  .status-btn.completed { background-color: var(--accent-yellow); border-color: var(--accent-yellow); color: var(--white); }
+  .status-btn:disabled { opacity:.6; cursor:not-allowed; }
 
   .status-indicator {
-    width: 30px;
-    height: 30px;
+    width: 30px; height: 30px;
     border: 2px solid var(--border-grey);
     border-radius: 50%;
     background: var(--white);
     color: var(--border-grey);
     font-size: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
   }
+  .status-indicator.completed { background-color: var(--accent-yellow); border-color: var(--accent-yellow); color: var(--white); }
 
-  .status-indicator.completed {
-    background-color: var(--accent-yellow);
-    border-color: var(--accent-yellow);
-    color: var(--white);
-  }
-
-  .aspecto-cell {
-    width: 22%;
-    font-weight: 500;
-    color: var(--primary-blue);
-    position: relative;
-  }
-
+  .aspecto-cell { width: 22%; font-weight: 500; color: var(--primary-blue); position: relative; }
   .completion-badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background-color: var(--accent-yellow);
-    color: var(--white);
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-weight: bold;
+    position: absolute; top: -5px; right: -5px;
+    background-color: var(--accent-yellow); color: var(--white);
+    font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold;
   }
-
   .role-badge {
-    position: absolute;
-    bottom: -5px;
-    right: -5px;
-    color: var(--white);
-    font-size: 8px;
-    padding: 2px 4px;
-    border-radius: 8px;
-    font-weight: bold;
+    position: absolute; bottom: -5px; right: -5px;
+    color: var(--white); font-size: 8px; padding: 2px 4px; border-radius: 8px; font-weight: bold;
   }
 
-  .signature-cell,
-  .date-cell {
-    width: 12%;
-  }
+  .signature-cell, .date-cell { width: 12%; }
+  .calidad-cell { width: 46%; }
 
-  .calidad-cell {
-    width: 46%;
-  }
+  .calidad-fields { display: flex; flex-direction: column; gap: 8px; }
+  .calidad-field { display: flex; align-items: center; gap: 8px; }
+  .calidad-field label { font-size: 12px; font-weight: 500; color: var(--primary-blue); min-width: 120px; }
 
-  .calidad-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  .calidad-field input[type="text"], .calidad-field textarea {
+    padding: 4px 8px; border: 1px solid var(--border-grey); border-radius: 4px; font-size: 12px; flex: 1; transition: all 0.3s ease;
   }
+  .calidad-field input[type="text"].filled, .calidad-field textarea.filled { border-color: var(--accent-yellow); background-color: #fffbf0; }
+  .calidad-checkbox { width: 16px; height: 16px; accent-color: var(--accent-yellow); }
+  .calidad-field input:focus, .calidad-field textarea:focus { outline: none; border-color: var(--primary-blue); }
 
-  .calidad-field {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .signature-cell input, .date-cell input {
+    width: 100%; padding: 8px; border: 1px solid var(--border-grey); border-radius: 4px; font-size: 12px; transition: all 0.3s ease;
   }
-
-  .calidad-field label {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--primary-blue);
-    min-width: 120px;
-  }
-
-  .calidad-field input[type="text"],
-  .calidad-field textarea {
-    padding: 4px 8px;
-    border: 1px solid var(--border-grey);
-    border-radius: 4px;
-    font-size: 12px;
-    flex: 1;
-    transition: all 0.3s ease;
-  }
-
-  .calidad-field input[type="text"].filled,
-  .calidad-field textarea.filled {
-    border-color: var(--accent-yellow);
-    background-color: #fffbf0;
-  }
-
-  .calidad-checkbox {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--accent-yellow);
-  }
-
-  .calidad-field input:focus,
-  .calidad-field textarea:focus {
-    outline: none;
-    border-color: var(--primary-blue);
-  }
-
-  .signature-cell input,
-  .date-cell input {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid var(--border-grey);
-    border-radius: 4px;
-    font-size: 12px;
-    transition: all 0.3s ease;
-  }
-
-  .signature-cell input.filled,
-  .date-cell input.filled {
-    border-color: var(--accent-yellow);
-    background-color: #fffbf0;
-  }
-
-  .signature-cell input:focus,
-  .date-cell input:focus {
-    outline: none;
-    border-color: var(--primary-blue);
-  }
+  .signature-cell input.filled, .date-cell input.filled { border-color: var(--accent-yellow); background-color: #fffbf0; }
+  .signature-cell input:focus, .date-cell input:focus { outline: none; border-color: var(--primary-blue); }
 
   .readonly-field {
-    padding: 8px;
-    border: 1px solid var(--border-grey);
-    border-radius: 4px;
-    font-size: 12px;
-    background-color: #f8f9fa;
-    color: var(--light-grey);
-    min-height: 20px;
-    display: flex;
-    align-items: center;
+    padding: 8px; border: 1px solid var(--border-grey); border-radius: 4px; font-size: 12px; background-color: #f8f9fa; color: var(--light-grey); min-height: 20px; display: flex; align-items: center;
   }
-
-  .readonly-field.filled {
-    border-color: var(--accent-yellow);
-    background-color: #fffbf0;
-    color: var(--primary-blue);
-  }
+  .readonly-field.filled { border-color: var(--accent-yellow); background-color: #fffbf0; color: var(--primary-blue); }
 
   @media (max-width: 768px) {
-    .checklist-table {
-      font-size: 12px;
-    }
-
-    .checklist-table th,
-    .checklist-table td {
-      padding: 8px 5px;
-    }
-
-    .calidad-field {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 4px;
-    }
-
-    .calidad-field label {
-      min-width: auto;
-    }
-
-    .status-btn,
-    .status-indicator {
-      width: 25px;
-      height: 25px;
-      font-size: 14px;
-    }
+    .checklist-table { font-size: 12px; }
+    .checklist-table th, .checklist-table td { padding: 8px 5px; }
+    .calidad-field { flex-direction: column; align-items: stretch; gap: 4px; }
+    .calidad-field label { min-width: auto; }
+    .status-btn, .status-indicator { width: 25px; height: 25px; font-size: 14px; }
   }
 </style>

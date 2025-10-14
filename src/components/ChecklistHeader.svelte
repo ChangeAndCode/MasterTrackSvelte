@@ -28,6 +28,7 @@
   $: currentIndex = (activeChecklist && totalOrders)
       ? clientChecklists.findIndex(c => c.id === activeChecklist.id)
       : -1;
+  $: dispatch('selectChecklist', activeChecklist ? { id: activeChecklist.id, folio: activeChecklist.folio, clientId: selectedClient?.id } : null);
 
   let debounceId;
 

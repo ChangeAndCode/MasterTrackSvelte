@@ -5,7 +5,11 @@
   import ProcessStats from './ProcessStats.svelte';
   import RoleSelector from './RoleSelector.svelte';
   import { sampleClientData, sampleChecklistData, sampleComments } from '../data/sampleData.js';
+  import { getChecklistDetail } from '../api/checklistApi.js';
 
+  let currentChecklist = null;   // { id, folio, clientId } | null
+  let detail = null;             // respuesta de GET /api/checklists/{id}
+  let loadingDetail = false;
   // Datos del checklist basados en el formulario
   let clientData = {
     cliente: '',
@@ -131,6 +135,11 @@
 
   // Calcular progreso
   $: progress = Math.round((checklistData.filter(item => item.completado).length / checklistData.length) * 100);
+  $: checklistId = currentChecklist?.id ?? null;
+  $: folio = currentChecklist?.folio ?? null;
+  $: steps = detail?.steps ?? [];                   // [{ stepKey, status, data }]
+  $: editableStepKeys = detail?.editableStepKeys ?? [];
+  $: stats = detail?.stats ?? { totalSteps: 0, done: 0, myPending: 0 };
 
   // Función para actualizar datos del cliente
   function updateClientData(field, value) {
@@ -221,6 +230,23 @@
       comentarios = '';
     }
   }
+
+  async function onSelectChecklist(e) {
+    currentChecklist = e.detail;              // puede ser null
+    if (!currentChecklist?.id) {              // sin selección => limpia
+      detail = null;
+      return;
+    }
+    loadingDetail = true;
+    try {
+      detail = await getChecklistDetail(currentChecklist.id);
+    } catch (err) {
+      console.error(err);
+      detail = null;
+    } finally {
+      loadingDetail = false;
+    }
+  }
 </script>
 
 <div class="checklist-container">
@@ -235,7 +261,7 @@
     <RoleSelector />
 
     <!-- Header del checklist -->
-    <ChecklistHeader {clientData} on:update={updateClientData} />
+    <ChecklistHeader on:selectChecklist={onSelectChecklist} />
 
     <!-- Estadísticas del proceso -->
     <ProcessStats {checklistData} {clientData} />
@@ -252,7 +278,17 @@
     </div>
 
     <!-- Tabla del checklist -->
-    <ChecklistTable {checklistData} on:update={updateChecklistItem} on:toggle={toggleStepCompletion} />
+    <ChecklistTable
+      {checklistId}
+      {folio}
+      {steps}
+      {editableStepKeys}
+      {stats}
+      {loadingDetail}
+      {checklistData}
+      on:update={updateChecklistItem}
+      on:toggle={toggleStepCompletion}
+    />
 
     <!-- Sección de comentarios -->
     <div class="comments-section">
