@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
-  import { searchClients } from '../api/checklistApi.js';
+  import { searchClients, getClientDocumentInfo, getClientChecklists } from '../api/checklistApi.js';
 
   const dispatch = createEventDispatcher();
 
@@ -14,18 +14,31 @@
   let errorMsg = '';
   let selectedClient = null;
 
+  // dropdown de cambio de orden
+  let showOrderMenu = false;
+  let docInfoEl; // contenedor para click-outside
+
+  // NUEVO: datos para document-info y paginación de órdenes
+  let docInfo = null;                 // { hasChecklist, code, totalPages } | null
+  let clientChecklists = [];          // lista de órdenes del cliente
+  let activeChecklist = null;         // orden activa/seleccionada
+
+  // índices calculados
+  $: totalOrders = clientChecklists?.length ?? 0;
+  $: currentIndex = (activeChecklist && totalOrders)
+      ? clientChecklists.findIndex(c => c.id === activeChecklist.id)
+      : -1;
+
   let debounceId;
 
   function triggerSearch() {
     clearTimeout(debounceId);
-
-    if (!query || query.trim().length < 1) {
+    if (!query || query.trim().length < 2) {
       results = [];
       open = false;
       errorMsg = '';
       return;
     }
-
     debounceId = setTimeout(async () => {
       loading = true;
       errorMsg = '';
@@ -45,12 +58,31 @@
     }, 300);
   }
 
-  function onPick(item) {
+  async function onPick(item) {
     open = false;
     focusedIndex = -1;
     selectedClient = item;
     query = item.name || '';
     dispatch('selectClient', item);
+
+    // Cargar document-info
+    try {
+      docInfo = await getClientDocumentInfo(item.id);
+    } catch (e) {
+      console.error(e);
+      docInfo = null;
+    }
+
+    // Cargar lista de órdenes del cliente y definir la activa
+    try {
+      clientChecklists = await getClientChecklists(item.id);
+      // Regla: tomar la MÁS ANTIGUA primero (índice 0).
+      activeChecklist = clientChecklists?.[0] ?? null;
+    } catch (e) {
+      console.error(e);
+      clientChecklists = [];
+      activeChecklist = null;
+    }
   }
 
   function onKeydown(e) {
@@ -76,17 +108,27 @@
     return d.toLocaleDateString();
   }
 
-  // Cerrar dropdown al hacer click fuera
+  // cerrar dropdown al hacer click fuera
   let rootEl;
   function onWindowClick(e) {
     if (!rootEl) return;
-    if (!rootEl.contains(e.target)) open = false;
+    const clickedInsideSearch = rootEl.contains(e.target);
+    const clickedInsideOrders = docInfoEl && docInfoEl.contains(e.target);
+    // cierra el dropdown de búsqueda si clic fuera
+    if (!clickedInsideSearch) open = false;
+    // cierra el menú de órdenes si clic fuera
+    if (!clickedInsideOrders) showOrderMenu = false;
   }
 
   onMount(() => {
     window.addEventListener('click', onWindowClick);
     return () => window.removeEventListener('click', onWindowClick);
   });
+  function selectOrderByIndex(i) {
+    if (!clientChecklists || i < 0 || i >= clientChecklists.length) return;
+    activeChecklist = clientChecklists[i];
+    showOrderMenu = false;
+  }
 </script>
 
 <div class="checklist-header">
@@ -105,9 +147,33 @@
       <h2>CHECKLIST DE CONTROL</h2>
     </div>
 
-    <div class="document-info">
-      <p>REG-OPN-001 REV 00</p>
-      <p>PÁGINA 1 DE 1</p>
+    <!-- DOCUMENT-INFO DINÁMICO -->
+    <div class="document-info order-switch" bind:this={docInfoEl}>
+      {#if totalOrders > 0 && currentIndex >= 0}
+        <p>{activeChecklist?.folio ?? (docInfo?.code || 'REG-OPN-001')}</p>
+        <p>PÁGINA {currentIndex + 1} DE {totalOrders}</p>
+        {#if totalOrders > 1}
+          <button type="button" class="order-btn" on:click={() => showOrderMenu = !showOrderMenu} aria-haspopup="listbox" aria-expanded={showOrderMenu}>cambiar</button>
+          {#if showOrderMenu}
+            <div class="order-menu" role="listbox">
+              {#each clientChecklists as o, i}
+                <div
+                  role="option"
+                  class="order-item {i === currentIndex ? 'active' : ''}"
+                  on:click={() => selectOrderByIndex(i)}
+                >
+                  <span class="order-index">{i + 1}</span>
+                  <span class="order-folio">{o.folio}</span>
+                  <span class="order-date">{formatDate(o.createdAt)}</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        {/if}
+      {:else}
+        <p>sin checklist u ordenes de compra</p>
+        <p>sin paginas</p>
+      {/if}
     </div>
   </div>
 
@@ -179,6 +245,7 @@
 
   @media (max-width: 768px) {
     .header-top { flex-direction: column; gap: 15px; text-align: center; }
+    .document-info { text-align: center; }
   }
 
   .dropdown {
@@ -201,4 +268,14 @@
   .loading { font-size: 14px; color: var(--light-grey); margin-top: 4px; }
   .error { color: #b91c1c; font-size: 14px; margin-top: 4px; }
   .selected-info { margin-top: 8px; font-size: 14px; color: var(--primary-blue); }
+.order-switch { position: relative; text-align: right; }
+  .order-btn { margin-top: 6px; padding: 4px 8px; border: 1px solid var(--primary-blue); background: var(--white); color: var(--primary-blue); border-radius: 6px; font-size: 12px; cursor: pointer; }
+  .order-btn:hover { background: #f3f7fd; }
+  .order-menu { position: absolute; right: 0; top: calc(100% + 6px); background: var(--white); border: 1px solid var(--border-grey); border-radius: 6px; min-width: 240px; box-shadow: 0 8px 24px rgba(0,0,0,.08); z-index: 6000; max-height: 260px; overflow: auto; }
+  .order-item { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; padding: 8px 12px; cursor: pointer; }
+  .order-item:hover, .order-item.active { background: #f3f7fd; }
+  .order-index { font-weight: 700; color: var(--primary-blue); }
+  .order-folio { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .order-date { font-size: 11px; color: var(--light-grey); }
+
 </style>

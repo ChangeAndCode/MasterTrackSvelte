@@ -58,3 +58,20 @@ export function toggleChecklistStep(id, stepKey, done) {
     }
   );
 }
+
+export async function getClientDocumentInfo(clientId) {
+  if (!clientId) throw new Error("clientId requerido");
+  return request(
+    BASE,
+    `/api/checklists/${encodeURIComponent(clientId)}/document-info`,
+    { method: "GET" }
+  );
+}
+
+export async function getClientChecklists(clientId) {
+  return request(
+    BASE,
+    `/api/checklists/by-client/${encodeURIComponent(clientId)}`,
+    { method: "GET" }
+  );
+}
