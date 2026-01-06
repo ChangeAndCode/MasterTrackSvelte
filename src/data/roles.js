@@ -1,4 +1,4 @@
-// src/data/roles.js
+// Opciones de rol disponibles en el registro
 export const ROLE_OPTIONS = [
   "Vendedor",
   "Coordinador",
@@ -15,10 +15,10 @@ export const ROLE_LABELS = {
   Vendedor: "Vendedor",
   Coordinador: "Coordinador",
   Programador: "Programador",
-  Almacen: "Almacén",
+  Almacen: "Almacen",
   Calidad: "Calidad",
-  "Tecnico Instalador": "Técnico Instalador",
-  "Soporte Tecnico": "Soporte Técnico",
-  Facturacion: "Facturación",
+  "Tecnico Instalador": "Tecnico Instalador",
+  "Soporte Tecnico": "Soporte Tecnico",
+  Facturacion: "Facturacion",
   Administrador: "Administrador",
 };

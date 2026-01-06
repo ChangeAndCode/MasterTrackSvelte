@@ -1,28 +1,32 @@
 <script>
-  import { onMount } from 'svelte';
-  import ChecklistTable from './ChecklistTable.svelte';
-  import ChecklistHeader from './ChecklistHeader.svelte';
-  import ProcessStats from './ProcessStats.svelte';
-  import RoleSelector from './RoleSelector.svelte';
-  import { sampleClientData, sampleChecklistData, sampleComments } from '../data/sampleData.js';
-  import { getChecklistDetail } from '../api/checklistApi.js';
+  import ChecklistTable from "./ChecklistTable.svelte";
+  import ChecklistHeader from "./ChecklistHeader.svelte";
+  import ProcessStats from "./ProcessStats.svelte";
+  import RoleSelector from "./RoleSelector.svelte";
+  import {
+    sampleClientData,
+    sampleChecklistData,
+    sampleComments,
+  } from "../data/sampleData.js";
+  import { getChecklistDetail } from "../api/checklistApi.js";
 
   let currentChecklist = null;   // { id, folio, clientId } | null
   let detail = null;             // respuesta de GET /api/checklists/{id}
   let loadingDetail = false;
+
   // Datos del checklist basados en el formulario
   let clientData = {
-    cliente: '',
-    fecha: new Date().toISOString().split('T')[0]
+    cliente: "",
+    fecha: new Date().toISOString().split("T")[0],
   };
 
-  // Estados del checklist
+  // Estados del checklist (plantilla base)
   let checklistData = [
     {
       id: 1,
-      aspecto: 'GENERAR ORDEN DE COMPRA',
-      firmaResponsable: '',
-      fecha: '',
+      aspecto: "GENERAR ORDEN DE COMPRA",
+      firmaResponsable: "",
+      fecha: "",
       completado: false,
       calidad: {
         datosCte: false,
@@ -32,208 +36,210 @@
         cortesia: false,
         demo: false,
         precioRenta: false,
-        folio: '',
-        numProgServ: ''
-      }
+        folio: "",
+        numProgServ: "",
+      },
     },
     {
       id: 2,
-      aspecto: 'COORDINACION DE SERVICIOS',
-      firmaResponsable: '',
-      fecha: '',
+      aspecto: "COORDINACION DE SERVICIOS",
+      firmaResponsable: "",
+      fecha: "",
       completado: false,
       calidad: {
         validado: false,
-        valido: false
-      }
+        valido: false,
+      },
     },
     {
       id: 3,
-      aspecto: 'PROGRAMADORES',
-      firmaResponsable: '',
-      fecha: '',
+      aspecto: "PROGRAMADORES",
+      firmaResponsable: "",
+      fecha: "",
       completado: false,
       calidad: {
         ids: false,
-        valido: false
-      }
+        valido: false,
+      },
     },
     {
       id: 4,
-      aspecto: 'ALMACÉN',
-      firmaResponsable: '',
-      fecha: '',
+      aspecto: "ALMACEN",
+      firmaResponsable: "",
+      fecha: "",
       completado: false,
       calidad: {
         matCompleto: false,
-        numVale: '',
-        hojaSalida: false
-      }
+        numVale: "",
+        hojaSalida: false,
+      },
     },
     {
       id: 5,
-      aspecto: 'CALIDAD',
-      firmaResponsable: '',
-      fecha: '',
+      aspecto: "CALIDAD",
+      firmaResponsable: "",
+      fecha: "",
       completado: false,
       calidad: {
-        observaciones: ''
-      }
+        observaciones: "",
+      },
     },
     {
       id: 6,
-      aspecto: 'TÉCNICO INSTALADOR',
-      firmaResponsable: '',
-      fecha: '',
+      aspecto: "TECNICO INSTALADOR",
+      firmaResponsable: "",
+      fecha: "",
       completado: false,
-      calidad: {}
+      calidad: {},
     },
     {
       id: 7,
-      aspecto: 'SOPORTE TÉCNICO',
-      firmaResponsable: '',
-      fecha: '',
+      aspecto: "SOPORTE TECNICO",
+      firmaResponsable: "",
+      fecha: "",
       completado: false,
       calidad: {
         procesada: false,
         pruebas: false,
-        notificacionCliente: false
-      }
+        notificacionCliente: false,
+      },
     },
     {
       id: 8,
-      aspecto: 'CALIDAD',
-      firmaResponsable: '',
-      fecha: '',
+      aspecto: "CALIDAD",
+      firmaResponsable: "",
+      fecha: "",
       completado: false,
       calidad: {
-        observaciones: ''
-      }
+        observaciones: "",
+      },
     },
     {
       id: 9,
-      aspecto: 'SALIDA DE MATERIAL (INSTALACION DE STOCK)',
-      firmaResponsable: '',
-      fecha: '',
+      aspecto: "SALIDA DE MATERIAL (INSTALACION DE STOCK)",
+      firmaResponsable: "",
+      fecha: "",
       completado: false,
       calidad: {
-        hojaSalida: ''
-      }
+        hojaSalida: "",
+      },
     },
     {
       id: 10,
-      aspecto: 'FACTURACIÓN',
-      firmaResponsable: '',
-      fecha: '',
+      aspecto: "FACTURACION",
+      firmaResponsable: "",
+      fecha: "",
       completado: false,
-      calidad: {}
-    }
+      calidad: {},
+    },
   ];
 
-  let comentarios = '';
+  let comentarios = "";
   let progress = 0;
 
   // Calcular progreso
-  $: progress = Math.round((checklistData.filter(item => item.completado).length / checklistData.length) * 100);
+  $: progress = Math.round(
+    (checklistData.filter((item) => item.completado).length /
+      checklistData.length) *
+      100
+  );
   $: checklistId = currentChecklist?.id ?? null;
   $: folio = currentChecklist?.folio ?? null;
-  $: steps = detail?.steps ?? [];                   // [{ stepKey, status, data }]
+  $: steps = detail?.steps ?? []; // [{ stepKey, status, data }]
   $: editableStepKeys = detail?.editableStepKeys ?? [];
   $: stats = detail?.stats ?? { totalSteps: 0, done: 0, myPending: 0 };
 
-  // Función para actualizar datos del cliente
+  // Actualizar datos del cliente
   function updateClientData(field, value) {
     clientData[field] = value;
   }
 
-  // Función para actualizar checklist
+  // Actualizar checklist
   function updateChecklistItem(id, field, value) {
-    const item = checklistData.find(item => item.id === id);
+    const item = checklistData.find((item) => item.id === id);
     if (item) {
-      if (field.includes('.')) {
-        const [parent, child] = field.split('.');
+      if (field.includes(".")) {
+        const [parent, child] = field.split(".");
         item[parent][child] = value;
       } else {
         item[field] = value;
       }
-      
-      // Verificar si el paso está completado
+
       checkStepCompletion(item);
     }
   }
 
   // Verificar si un paso está completado
   function checkStepCompletion(item) {
-    const hasSignature = item.firmaResponsable.trim() !== '';
-    const hasDate = item.fecha !== '';
-    const hasCalidadData = Object.values(item.calidad).some(val => 
-      typeof val === 'boolean' ? val : (typeof val === 'string' && val.trim() !== '')
+    const hasSignature = item.firmaResponsable.trim() !== "";
+    const hasDate = item.fecha !== "";
+    const hasCalidadData = Object.values(item.calidad).some((val) =>
+      typeof val === "boolean" ? val : typeof val === "string" && val.trim() !== ""
     );
-    
+
     item.completado = hasSignature && hasDate && hasCalidadData;
   }
 
-  // Función para marcar paso como completado
+  // Marcar paso como completado
   function toggleStepCompletion(id) {
-    const item = checklistData.find(item => item.id === id);
+    const item = checklistData.find((item) => item.id === id);
     if (item) {
       item.completado = !item.completado;
       if (item.completado && !item.fecha) {
-        item.fecha = new Date().toISOString().split('T')[0];
+        item.fecha = new Date().toISOString().split("T")[0];
       }
     }
   }
 
-  // Función para cargar datos de ejemplo
+  // Cargar datos de ejemplo
   function loadSampleData() {
-    if (confirm('¿Cargar datos de ejemplo? Esto reemplazará los datos actuales.')) {
+    if (confirm("¿Cargar datos de ejemplo? Esto reemplazará los datos actuales.")) {
       clientData = { ...sampleClientData };
       checklistData = JSON.parse(JSON.stringify(sampleChecklistData));
       comentarios = sampleComments;
     }
   }
 
-  // Función para guardar/exportar
+  // Guardar/exportar
   function saveChecklist() {
     const data = {
       clientData,
       checklistData,
       comentarios,
       progress,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
-    
-    // Aquí se conectaría con el backend
-    console.log('Datos del checklist:', data);
+
+    console.log("Datos del checklist:", data);
     alert(`Checklist guardado exitosamente. Progreso: ${progress}%`);
   }
 
-  // Función para limpiar formulario
+  // Limpiar formulario
   function clearForm() {
-    if (confirm('¿Estás seguro de que quieres limpiar todo el formulario?')) {
+    if (confirm("¿Estás seguro de que quieres limpiar todo el formulario?")) {
       clientData = {
-        cliente: '',
-        fecha: new Date().toISOString().split('T')[0]
+        cliente: "",
+        fecha: new Date().toISOString().split("T")[0],
       };
-      
-      checklistData = checklistData.map(item => ({
+
+      checklistData = checklistData.map((item) => ({
         ...item,
-        firmaResponsable: '',
-        fecha: '',
+        firmaResponsable: "",
+        fecha: "",
         completado: false,
         calidad: Object.keys(item.calidad).reduce((acc, key) => {
-          acc[key] = typeof item.calidad[key] === 'boolean' ? false : '';
+          acc[key] = typeof item.calidad[key] === "boolean" ? false : "";
           return acc;
-        }, {})
+        }, {}),
       }));
-      
-      comentarios = '';
+
+      comentarios = "";
     }
   }
 
   async function onSelectChecklist(e) {
-    currentChecklist = e.detail;              // puede ser null
-    if (!currentChecklist?.id) {              // sin selección => limpia
+    currentChecklist = e.detail; // puede ser null
+    if (!currentChecklist?.id) {
       detail = null;
       return;
     }
@@ -251,33 +257,33 @@
 
 <div class="checklist-container">
   <div class="container">
-    <!-- Título principal -->
     <div class="main-title">
-      <h2>PLATAFORMA AVANZADA DE SEGURIDAD Y GESTIÓN DE FLOTAS</h2>
-      <h1>¡Tenemos una <span class="highlight">solución</span> para cada <span class="highlight">problemática del Transporte!</span></h1>
+      <h2>PLATAFORMA AVANZADA DE SEGURIDAD Y GESTION DE FLOTAS</h2>
+      <h1>
+        Tenemos una <span class="highlight">solución</span> para cada
+        <span class="highlight">problemática del transporte</span>
+      </h1>
     </div>
 
-    <!-- Selector de roles -->
     <RoleSelector />
 
-    <!-- Header del checklist -->
     <ChecklistHeader on:selectChecklist={onSelectChecklist} />
 
-    <!-- Estadísticas del proceso -->
     <ProcessStats {checklistData} {clientData} />
 
-    <!-- Barra de progreso -->
     <div class="progress-section">
       <div class="progress-info">
-        <span>Progreso del Proceso: {progress}%</span>
-        <span>{checklistData.filter(item => item.completado).length} de {checklistData.length} pasos completados</span>
+        <span>Progreso del proceso: {progress}%</span>
+        <span
+          >{checklistData.filter((item) => item.completado).length} de {checklistData.length}
+          pasos completados</span
+        >
       </div>
       <div class="progress-bar">
         <div class="progress-fill" style="width: {progress}%"></div>
       </div>
     </div>
 
-    <!-- Tabla del checklist -->
     <ChecklistTable
       {checklistId}
       {folio}
@@ -290,29 +296,27 @@
       on:toggle={toggleStepCompletion}
     />
 
-    <!-- Sección de comentarios -->
     <div class="comments-section">
-      <h3>COMENTARIOS:</h3>
-      <textarea 
+      <h3>COMENTARIOS</h3>
+      <textarea
         bind:value={comentarios}
         placeholder="Ingrese comentarios adicionales..."
         rows="4"
       ></textarea>
     </div>
 
-    <!-- Botones de acción -->
     <div class="actions">
       <button class="btn btn-outline" on:click={loadSampleData}>
-        Cargar Ejemplo
+        Cargar ejemplo
       </button>
       <button class="btn btn-outline" on:click={clearForm}>
-        Limpiar Formulario
+        Limpiar formulario
       </button>
       <button class="btn btn-outline" on:click={() => window.print()}>
-        Imprimir Checklist
+        Imprimir checklist
       </button>
       <button class="btn btn-primary" on:click={saveChecklist}>
-        Guardar Checklist
+        Guardar checklist
       </button>
     </div>
   </div>

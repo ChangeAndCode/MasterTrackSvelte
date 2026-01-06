@@ -62,7 +62,7 @@
 {/if}
 
 <style>
-  .login { max-width: 360px; margin: 40px auto; display: grid; gap: 10px; }
+  .login { max-width: 360px; margin: 40px auto; display: grid; gap: 10px;}
   .error { color: #b00020; margin: 0; }
   button[disabled] { opacity: .7; cursor: not-allowed; }
 </style>

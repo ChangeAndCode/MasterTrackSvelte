@@ -4,11 +4,11 @@
   import { getRoleColorByName, normalizeRoleKey } from "../stores/roleStore.js";
 
   // ===== Props del padre =====
-  export let checklistData = [];           // Tu estructura visual (se renderiza SIEMPRE)
-  export let editableStepKeys = [];        // StepKeys reales desde backend (p.ej. ["ALMACEN","TECNICO",...])
+  export let checklistData = [];           // Estructura visual que se renderiza siempre
+  export let editableStepKeys = [];        // StepKeys reales desde backend (p.ej. ["ALMACEN","TECNICO"])
   export let checklistId = null;           // null => sin orden seleccionada
   export let folio = null;
-  export let steps = [];                   // [{ stepKey, status, data }] (aún no mapeado a campos visuales)
+  export let steps = [];                   // [{ stepKey, status, data }] (aun no mapeado a campos visuales)
   export let stats = { totalSteps: 0, done: 0, myPending: 0 };
   export let loadingDetail = false;        // Para bloquear inputs durante carga
 
@@ -16,12 +16,19 @@
 
   // ===== Usuario/rol actual =====
   $: me = $auth?.me || null;
-  $: roleName = me?.role || "";                         // "Administrador", "Almacén", ...
-  $: roleKey = normalizeRoleKey(roleName);              // ADMIN, ALMACEN, ...
+  $: roleName = me?.role || "";           // "Administrador", "Almacen", ...
+  $: roleKey = normalizeRoleKey(roleName); // ADMIN, ALMACEN, ...
   $: isAdmin = roleKey === "ADMIN";
   $: roleColor = getRoleColorByName(roleName);
 
-  // ===== Eventos hacia el padre (conservamos tu API) =====
+  // ===== Derivados de stats/steps para mostrarlos y evitar warnings =====
+  $: serverTotal = stats?.totalSteps ?? 0;
+  $: serverDone = stats?.done ?? 0;
+  $: serverMyPending = stats?.myPending ?? 0;
+  $: hasServerStats = serverTotal || serverDone || serverMyPending;
+  $: stepsCount = Array.isArray(steps) ? steps.length : 0;
+
+  // ===== Eventos hacia el padre =====
   function handleUpdate(id, field, value) {
     dispatch("update", { id, field, value });
   }
@@ -35,18 +42,14 @@
       case "GENERAR ORDEN DE COMPRA": return "GENERAR_OC";
       case "COORDINACION DE SERVICIOS": return "COORDINACION";
       case "PROGRAMADORES": return "PROGRAMADORES";
-      case "ALMACÉN": return "ALMACEN";
+      case "ALMACEN": return "ALMACEN";
       case "CALIDAD":
-        // En tu tabla hay 2 filas “CALIDAD”. Diferéncialas por id:
-        // id:5 -> CALIDAD_1, id:8 -> CALIDAD_2 (según tu seed local)
+        // Dos filas de CALIDAD: id 5 -> CALIDAD_1, id 8 -> CALIDAD_2 (segun semilla local)
         return item.id === 5 ? "CALIDAD_1" : "CALIDAD_2";
-      case "TÉCNICO INSTALADOR": return "TECNICO";
-      case "SOPORTE TÉCNICO": return "SOPORTE";
-      case "SALIDA DE MATERIAL (INSTALACION DE STOCK)":
-        // Si más adelante defines StepKey propio en backend, cámbialo aquí.
-        // De momento, sin StepKey => solo lectura
-        return null;
-      case "FACTURACIÓN": return "FACTURACION";
+      case "TECNICO INSTALADOR": return "TECNICO";
+      case "SOPORTE TECNICO": return "SOPORTE";
+      case "SALIDA DE MATERIAL (INSTALACION DE STOCK)": return null; // sin stepKey definido
+      case "FACTURACION": return "FACTURACION";
       default: return null;
     }
   }
@@ -58,7 +61,7 @@
     return !!k && editableStepKeys.includes(k);
   };
 
-  // ===== Campos de “Calidad” por aspecto (tu layout actual) =====
+  // ===== Campos de "Calidad" por aspecto (layout actual) =====
   function getCalidadFields(aspecto) {
     switch (aspecto) {
       case "GENERAR ORDEN DE COMPRA":
@@ -76,24 +79,24 @@
       case "COORDINACION DE SERVICIOS":
         return [
           { key: "validado", label: "VALIDADO", type: "checkbox" },
-          { key: "valido", label: "VÁLIDO", type: "checkbox" }
+          { key: "valido", label: "VALIDO", type: "checkbox" }
         ];
       case "PROGRAMADORES":
         return [
           { key: "ids", label: "ID'S", type: "checkbox" },
-          { key: "valido", label: "VÁLIDO", type: "checkbox" }
+          { key: "valido", label: "VALIDO", type: "checkbox" }
         ];
-      case "ALMACÉN":
+      case "ALMACEN":
         return [
           { key: "matCompleto", label: "MAT. COMPLETO", type: "checkbox" },
           { key: "numVale", label: "# DE VALE", type: "text" },
           { key: "hojaSalida", label: "# HOJA SALIDA", type: "checkbox" }
         ];
       case "CALIDAD":
-        return [{ key: "observaciones", label: "OBSERVACIONES:", type: "textarea" }];
-      case "TÉCNICO INSTALADOR":
+        return [{ key: "observaciones", label: "OBSERVACIONES", type: "textarea" }];
+      case "TECNICO INSTALADOR":
         return [];
-      case "SOPORTE TÉCNICO":
+      case "SOPORTE TECNICO":
         return [
           { key: "procesada", label: "PROCESADA", type: "checkbox" },
           { key: "pruebas", label: "PRUEBAS", type: "checkbox" },
@@ -101,7 +104,7 @@
         ];
       case "SALIDA DE MATERIAL (INSTALACION DE STOCK)":
         return [{ key: "hojaSalida", label: "# HOJA SALIDA", type: "text" }];
-      case "FACTURACIÓN":
+      case "FACTURACION":
         return [];
       default:
         return [];
@@ -112,8 +115,14 @@
 <div class="checklist-table-container">
   {#if !checklistId}
     <div class="badge">Sin orden seleccionada — modo solo visual</div>
-  {:else if folio}
-    <div class="badge">Folio activo: <strong>{folio}</strong></div>
+  {:else}
+    <div class="badge">Folio activo: <strong>{folio ?? "Sin folio"}</strong></div>
+    {#if hasServerStats}
+      <div class="badge secondary">
+        Progreso servidor: {serverDone}/{serverTotal} | Pendientes asignados: {serverMyPending}
+      </div>
+    {/if}
+    <div class="badge muted">Pasos recibidos: {stepsCount}</div>
   {/if}
 
   <table class="checklist-table">
@@ -138,11 +147,11 @@
                 on:click={() => handleToggle(item.id)}
                 title={item.completado ? 'Marcar como pendiente' : 'Marcar como completado'}
                 disabled={loadingDetail}>
-                {#if item.completado} ✓ {:else} ○ {/if}
+                {#if item.completado} &check; {:else} &times; {/if}
               </button>
             {:else}
               <div class="status-indicator {item.completado ? 'completed' : ''}">
-                {#if item.completado} ✓ {:else} ○ {/if}
+                {#if item.completado} &check; {:else} &times; {/if}
               </div>
             {/if}
           </td>
@@ -190,13 +199,15 @@
 
           <td class="calidad-cell">
             <div class="calidad-fields">
-              {#each getCalidadFields(item.aspecto) as field}
+              {#each getCalidadFields(item.aspecto) as field, idx}
+                {@const controlId = `cal-${item.id}-${field.key}-${idx}`}
                 <div class="calidad-field">
-                  <label>{field.label}</label>
-
                   {#if isEditable}
+                    <label for={controlId}>{field.label}</label>
+
                     {#if field.type === 'checkbox'}
                       <input
+                        id={controlId}
                         type="checkbox"
                         checked={item.calidad[field.key]}
                         on:change={(e) => handleUpdate(item.id, `calidad.${field.key}`, e.target.checked)}
@@ -204,6 +215,7 @@
                         disabled={loadingDetail} />
                     {:else if field.type === 'text'}
                       <input
+                        id={controlId}
                         type="text"
                         value={item.calidad[field.key] || ''}
                         on:input={(e) => handleUpdate(item.id, `calidad.${field.key}`, e.target.value)}
@@ -212,6 +224,7 @@
                         disabled={loadingDetail} />
                     {:else if field.type === 'textarea'}
                       <textarea
+                        id={controlId}
                         value={item.calidad[field.key] || ''}
                         on:input={(e) => handleUpdate(item.id, `calidad.${field.key}`, e.target.value)}
                         placeholder={field.label}
@@ -220,9 +233,10 @@
                         disabled={loadingDetail}></textarea>
                     {/if}
                   {:else}
+                    <div class="calidad-label">{field.label}</div>
                     <div class="readonly-field {item.calidad[field.key] ? 'filled' : ''}">
                       {#if field.type === 'checkbox'}
-                        {item.calidad[field.key] ? '✓' : '○'}
+                        {item.calidad[field.key] ? 'Si' : 'No'}
                       {:else}
                         {item.calidad[field.key] || 'No especificado'}
                       {/if}
@@ -245,7 +259,7 @@
   }
 
   .badge {
-    margin: 8px 0 12px;
+    margin: 8px 8px 12px 0;
     display: inline-block;
     padding: 4px 10px;
     border-radius: 999px;
@@ -254,6 +268,8 @@
     font-size: 12px;
     font-weight: 600;
   }
+  .badge.secondary { background: #fff7e6; color: #a05a00; }
+  .badge.muted { background: #f3f3f3; color: #555; }
 
   .checklist-table {
     width: 100%;
@@ -327,11 +343,12 @@
   .calidad-cell { width: 46%; }
 
   .calidad-fields { display: flex; flex-direction: column; gap: 8px; }
-  .calidad-field { display: flex; align-items: center; gap: 8px; }
-  .calidad-field label { font-size: 12px; font-weight: 500; color: var(--primary-blue); min-width: 120px; }
+  .calidad-field { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: center; }
+  .calidad-label { font-size: 12px; font-weight: 600; color: var(--primary-blue); }
+  .calidad-field label { font-size: 12px; font-weight: 600; color: var(--primary-blue); }
 
   .calidad-field input[type="text"], .calidad-field textarea {
-    padding: 4px 8px; border: 1px solid var(--border-grey); border-radius: 4px; font-size: 12px; flex: 1; transition: all 0.3s ease;
+    padding: 4px 8px; border: 1px solid var(--border-grey); border-radius: 4px; font-size: 12px; transition: all 0.3s ease;
   }
   .calidad-field input[type="text"].filled, .calidad-field textarea.filled { border-color: var(--accent-yellow); background-color: #fffbf0; }
   .calidad-checkbox { width: 16px; height: 16px; accent-color: var(--accent-yellow); }
@@ -351,8 +368,7 @@
   @media (max-width: 768px) {
     .checklist-table { font-size: 12px; }
     .checklist-table th, .checklist-table td { padding: 8px 5px; }
-    .calidad-field { flex-direction: column; align-items: stretch; gap: 4px; }
-    .calidad-field label { min-width: auto; }
+    .calidad-field { grid-template-columns: 1fr; }
     .status-btn, .status-indicator { width: 25px; height: 25px; font-size: 14px; }
   }
 </style>

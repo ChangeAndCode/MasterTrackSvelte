@@ -1,51 +1,58 @@
 <script>
- import { auth } from "../stores/auth.js";
-  import { getRoleColorByName, getRoleLabelByName, normalizeRoleKey } from "../stores/roleStore.js";
+  import { auth } from "../stores/auth.js";
+  import {
+    getRoleColorByName,
+    getRoleLabelByName,
+    normalizeRoleKey,
+  } from "../stores/roleStore.js";
 
- // Props del padre
-  export let checklistData = [];     // array de pasos { aspecto, completado, calidad, ... }
+  // Props del padre
+  export let checklistData = [];     // pasos { aspecto, completado, calidad, ... }
   export let clientData = {};        // info de cabecera (cliente, fecha, etc.)
-  export let editableStepKeys = [];  // lista de aspectos que el usuario puede editar (del backend)
+  export let editableStepKeys = [];  // lista de aspectos editables (backend)
 
-// Rol actual desde auth
-  $: me       = $auth?.me || null;
-  $: roleName = me?.role || "";                  // "Administrador", "Almacén", ...
-  $: roleKey  = normalizeRoleKey(roleName);      // ADMIN, ALMACEN, ...
+  // Rol actual desde auth
+  $: me = $auth?.me || null;
+  $: roleName = me?.role || "";             // "Administrador", "Almacen", ...
+  $: roleKey = normalizeRoleKey(roleName);  // ADMIN, ALMACEN, ...
   $: roleColor = getRoleColorByName(roleName);
   $: roleLabel = getRoleLabelByName(roleName);
-  $: isAdmin  = roleKey === "ADMIN";
+  $: isAdmin = roleKey === "ADMIN";
 
-// --- Estadísticas generales ---
-  $: totalSteps        = checklistData.length;
-  $: completedSteps    = checklistData.filter(item => item.completado).length;
-  $: pendingSteps      = totalSteps - completedSteps;
-  $: progressPercentage = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+  // Estadisticas generales
+  $: totalSteps = checklistData.length;
+  $: completedSteps = checklistData.filter((item) => item.completado).length;
+  $: pendingSteps = totalSteps - completedSteps;
+  $: progressPercentage =
+    totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
 
-  // Pasos "críticos": arbitrario = más de 2 campos en calidad
-  $: criticalSteps     = checklistData.filter(item => Object.keys(item.calidad || {}).length > 2);
-  $: criticalCompleted = criticalSteps.filter(item => item.completado).length;
+  // Pasos criticos: arbitrario = mas de 2 campos en calidad
+  $: criticalSteps = checklistData.filter(
+    (item) => Object.keys(item.calidad || {}).length > 2
+  );
+  $: criticalCompleted = criticalSteps.filter((item) => item.completado).length;
 
   // Tiempo estimado (30min por paso pendiente)
-  $: estimatedTime    = pendingSteps * 30;
-  $: estimatedHours   = Math.floor(estimatedTime / 60);
+  $: estimatedTime = pendingSteps * 30;
+  $: estimatedHours = Math.floor(estimatedTime / 60);
   $: estimatedMinutes = estimatedTime % 60;
 
-  // --- Estadísticas del usuario (rol) ---
+  // Estadisticas del usuario (rol)
   const canEditAspect = (aspecto) => isAdmin || editableStepKeys.includes(aspecto);
 
-  $: userSteps            = checklistData.filter(item => canEditAspect(item.aspecto));
-  $: userCompletedSteps   = userSteps.filter(item => item.completado).length;
-  $: userProgressPercentage = userSteps.length > 0
+  $: userSteps = checklistData.filter((item) => canEditAspect(item.aspecto));
+  $: userCompletedSteps = userSteps.filter((item) => item.completado).length;
+  $: userProgressPercentage =
+    userSteps.length > 0
       ? Math.round((userCompletedSteps / userSteps.length) * 100)
       : 0;
-  $: userPendingSteps     = userSteps.length - userCompletedSteps;
+  $: userPendingSteps = userSteps.length - userCompletedSteps;
 </script>
 
 <div class="stats-container">
   <div class="stats-grid">
-    <!-- Progreso general -->
     <div class="stat-card">
-      <div class="stat-icon">📊</div>
+      <div class="stat-icon">PG</div>
       <div class="stat-content">
         <h3>Progreso General</h3>
         <div class="stat-value">{progressPercentage}%</div>
@@ -53,9 +60,8 @@
       </div>
     </div>
 
-    <!-- Progreso del usuario -->
     <div class="stat-card user-progress" style="border-color:{roleColor}">
-      <div class="stat-icon" style="background-color:{roleColor}">👤</div>
+      <div class="stat-icon" style="background-color:{roleColor}">MP</div>
       <div class="stat-content">
         <h3>Mi Progreso ({roleLabel})</h3>
         <div class="stat-value">{userProgressPercentage}%</div>
@@ -63,9 +69,8 @@
       </div>
     </div>
 
-    <!-- Pendientes del usuario -->
     <div class="stat-card">
-      <div class="stat-icon">⏳</div>
+      <div class="stat-icon">PE</div>
       <div class="stat-content">
         <h3>Mis Pendientes</h3>
         <div class="stat-value">{userPendingSteps}</div>
@@ -73,19 +78,17 @@
       </div>
     </div>
 
-    <!-- Pasos críticos -->
     <div class="stat-card">
-      <div class="stat-icon">⚠️</div>
+      <div class="stat-icon">CR</div>
       <div class="stat-content">
-        <h3>Pasos Críticos</h3>
+        <h3>Pasos Criticos</h3>
         <div class="stat-value">{criticalCompleted}/{criticalSteps.length}</div>
         <div class="stat-detail">completados</div>
       </div>
     </div>
 
-    <!-- Tiempo estimado -->
     <div class="stat-card">
-      <div class="stat-icon">⏰</div>
+      <div class="stat-icon">TI</div>
       <div class="stat-content">
         <h3>Tiempo Estimado</h3>
         <div class="stat-value">
@@ -99,16 +102,15 @@
       </div>
     </div>
 
-    <!-- Próximo paso -->
     <div class="stat-card">
-      <div class="stat-icon">🎯</div>
+      <div class="stat-icon">PX</div>
       <div class="stat-content">
-        <h3>Próximo Paso</h3>
+        <h3>Proximo Paso</h3>
         <div class="stat-value">
           {#if userPendingSteps > 0}
-            {userSteps.find(item => !item.completado)?.aspecto.split(" ").slice(0, 2).join(" ") || "N/A"}
+            {userSteps.find((item) => !item.completado)?.aspecto.split(" ").slice(0, 2).join(" ") || "N/A"}
           {:else}
-            ¡Completado!
+            Completado
           {/if}
         </div>
         <div class="stat-detail">
@@ -120,18 +122,25 @@
 
   {#if clientData?.cliente}
     <div class="client-info-card">
-      <h3>📋 Información del Cliente</h3>
+      <h3>Informacion del Cliente</h3>
       <div class="client-details">
         <div class="client-field">
           <strong>Cliente:</strong> {clientData.cliente}
         </div>
         <div class="client-field">
-          <strong>Fecha:</strong> {clientData.fecha ? new Date(clientData.fecha).toLocaleDateString("es-ES") : "—"}
+          <strong>Fecha:</strong>
+          {clientData.fecha
+            ? new Date(clientData.fecha).toLocaleDateString("es-ES")
+            : "Sin fecha"}
         </div>
         <div class="client-field">
           <strong>Estado:</strong>
           <span class="status-badge {progressPercentage === 100 ? 'completed' : progressPercentage > 50 ? 'in-progress' : 'pending'}">
-            {progressPercentage === 100 ? "Completado" : progressPercentage > 50 ? "En Progreso" : "Pendiente"}
+            {progressPercentage === 100
+              ? "Completado"
+              : progressPercentage > 50
+              ? "En Progreso"
+              : "Pendiente"}
           </span>
         </div>
         <div class="client-field">
@@ -179,7 +188,7 @@
   }
 
   .stat-icon {
-    font-size: 32px;
+    font-size: 14px;
     width: 50px;
     height: 50px;
     display: flex;
@@ -188,6 +197,7 @@
     background-color: var(--accent-yellow);
     border-radius: 50%;
     color: var(--white);
+    font-weight: 700;
   }
 
   .stat-content h3 {
@@ -277,7 +287,7 @@
     }
 
     .stat-icon {
-      font-size: 24px;
+      font-size: 12px;
       width: 40px;
       height: 40px;
     }
