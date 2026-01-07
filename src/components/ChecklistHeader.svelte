@@ -1,34 +1,52 @@
-<script>
-  import { createEventDispatcher, onMount } from 'svelte';
-  import { searchClients, getClientDocumentInfo, getClientChecklists } from '../api/checklistApi.js';
+<script>  import { createEventDispatcher, onMount } from "svelte";
+  import {
+    searchClients,
+    getClientDocumentInfo,
+    getClientChecklists,
+    createChecklist,
+  } from "../api/checklistApi.js";
+  import { auth } from "../stores/auth.js";
+  import { normalizeRoleKey } from "../stores/roleStore.js";
 
   const dispatch = createEventDispatcher();
 
-  let query = '';
+  let query = "";
   let take = 20;
 
   let loading = false;
   let results = [];
   let open = false;
   let focusedIndex = -1;
-  let errorMsg = '';
+  let errorMsg = "";
   let selectedClient = null;
 
   // dropdown de cambio de orden
   let showOrderMenu = false;
   let docInfoEl; // contenedor para click-outside
 
-  // NUEVO: datos para document-info y paginación de órdenes
-  let docInfo = null;                 // { hasChecklist, code, totalPages } | null
-  let clientChecklists = [];          // lista de órdenes del cliente
-  let activeChecklist = null;         // orden activa/seleccionada
+  // datos para document-info y paginacion de ordenes
+  let docInfo = null; // { hasChecklist, code, totalPages } | null
+  let clientChecklists = []; // lista de ordenes del cliente
+  let activeChecklist = null; // orden activa/seleccionada
+  let createError = "";
+  let creating = false;
 
-  // índices calculados
+  // indices calculados
   $: totalOrders = clientChecklists?.length ?? 0;
-  $: currentIndex = (activeChecklist && totalOrders)
-      ? clientChecklists.findIndex(c => c.id === activeChecklist.id)
+  $: currentIndex =
+    activeChecklist && totalOrders
+      ? clientChecklists.findIndex((c) => c.id === activeChecklist.id)
       : -1;
-  $: dispatch('selectChecklist', activeChecklist ? { id: activeChecklist.id, folio: activeChecklist.folio, clientId: selectedClient?.id } : null);
+  $: dispatch(
+    "selectChecklist",
+    activeChecklist
+      ? { id: activeChecklist.id, folio: activeChecklist.folio, clientId: selectedClient?.id }
+      : null
+  );
+  $: me = $auth?.me || null;
+  $: roleName = me?.role || "";
+  $: roleKey = normalizeRoleKey(roleName);
+  $: canCreateChecklist = roleKey === "VENDEDOR" || roleKey === "ADMIN";
 
   let debounceId;
 
@@ -37,12 +55,12 @@
     if (!query || query.trim().length < 2) {
       results = [];
       open = false;
-      errorMsg = '';
+      errorMsg = "";
       return;
     }
     debounceId = setTimeout(async () => {
       loading = true;
-      errorMsg = '';
+      errorMsg = "";
       try {
         const list = await searchClients(query.trim(), take);
         results = Array.isArray(list) ? list : [];
@@ -50,7 +68,7 @@
         focusedIndex = results.length ? 0 : -1;
       } catch (err) {
         console.error(err);
-        errorMsg = 'No se pudo buscar clientes. Verifica tu sesión.';
+        errorMsg = "No se pudo buscar clientes. Verifica tu sesion.";
         results = [];
         open = false;
       } finally {
@@ -63,8 +81,8 @@
     open = false;
     focusedIndex = -1;
     selectedClient = item;
-    query = item.name || '';
-    dispatch('selectClient', item);
+    query = item.name || "";
+    dispatch("selectClient", item);
 
     // Cargar document-info
     try {
@@ -74,11 +92,10 @@
       docInfo = null;
     }
 
-    // Cargar lista de órdenes del cliente y definir la activa
+    // Cargar lista de ordenes del cliente y definir la activa
     try {
       clientChecklists = await getClientChecklists(item.id);
-      // Regla: tomar la MÁS ANTIGUA primero (índice 0).
-      activeChecklist = clientChecklists?.[0] ?? null;
+      activeChecklist = clientChecklists?.[0] ?? null; // mas antigua primero
     } catch (e) {
       console.error(e);
       clientChecklists = [];
@@ -88,24 +105,24 @@
 
   function onKeydown(e) {
     if (!open || !results.length) return;
-    if (e.key === 'ArrowDown') {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
       focusedIndex = (focusedIndex + 1) % results.length;
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === "ArrowUp") {
       e.preventDefault();
       focusedIndex = (focusedIndex - 1 + results.length) % results.length;
-    } else if (e.key === 'Enter') {
+    } else if (e.key === "Enter") {
       e.preventDefault();
       if (focusedIndex >= 0 && results[focusedIndex]) onPick(results[focusedIndex]);
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       open = false;
     }
   }
 
   function formatDate(v) {
-    if (!v) return '';
+    if (!v) return "";
     const d = new Date(v);
-    if (isNaN(d)) return '';
+    if (isNaN(d)) return "";
     return d.toLocaleDateString();
   }
 
@@ -115,20 +132,35 @@
     if (!rootEl) return;
     const clickedInsideSearch = rootEl.contains(e.target);
     const clickedInsideOrders = docInfoEl && docInfoEl.contains(e.target);
-    // cierra el dropdown de búsqueda si clic fuera
     if (!clickedInsideSearch) open = false;
-    // cierra el menú de órdenes si clic fuera
     if (!clickedInsideOrders) showOrderMenu = false;
   }
 
   onMount(() => {
-    window.addEventListener('click', onWindowClick);
-    return () => window.removeEventListener('click', onWindowClick);
+    window.addEventListener("click", onWindowClick);
+    return () => window.removeEventListener("click", onWindowClick);
   });
+
   function selectOrderByIndex(i) {
     if (!clientChecklists || i < 0 || i >= clientChecklists.length) return;
     activeChecklist = clientChecklists[i];
     showOrderMenu = false;
+  }
+
+  async function onCreateChecklist() {
+    if (!selectedClient?.id || !canCreateChecklist || creating) return;
+    createError = "";
+    creating = true;
+    try {
+      const payload = { clientId: selectedClient.id, date: new Date().toISOString() };
+      const created = await createChecklist(payload);
+      clientChecklists = [created, ...(clientChecklists || [])];
+      activeChecklist = created;
+    } catch (e) {
+      createError = e?.message || "No se pudo crear el checklist";
+    } finally {
+      creating = false;
+    }
   }
 </script>
 
@@ -148,13 +180,21 @@
       <h2>CHECKLIST DE CONTROL</h2>
     </div>
 
-    <!-- DOCUMENT-INFO DINÁMICO -->
+    <!-- DOCUMENT-INFO DINAMICO -->
     <div class="document-info order-switch" bind:this={docInfoEl}>
       {#if totalOrders > 0 && currentIndex >= 0}
         <p>{activeChecklist?.folio ?? (docInfo?.code || 'REG-OPN-001')}</p>
-        <p>PÁGINA {currentIndex + 1} DE {totalOrders}</p>
+        <p>PAGINA {currentIndex + 1} DE {totalOrders}</p>
         {#if totalOrders > 1}
-          <button type="button" class="order-btn" on:click={() => showOrderMenu = !showOrderMenu} aria-haspopup="listbox" aria-expanded={showOrderMenu}>cambiar</button>
+          <button
+            type="button"
+            class="order-btn"
+            on:click={() => (showOrderMenu = !showOrderMenu)}
+            aria-haspopup="listbox"
+            aria-expanded={showOrderMenu}
+          >
+            cambiar
+          </button>
           {#if showOrderMenu}
             <div class="order-menu" role="listbox">
               {#each clientChecklists as o, i}
@@ -214,6 +254,15 @@
           Registrado: <strong>{formatDate(selectedClient.registeredAt)}</strong>
         </div>
       {/if}
+
+      {#if canCreateChecklist && selectedClient}
+        <div class="create-cta">
+          <button type="button" class="order-btn primary" on:click={onCreateChecklist} disabled={creating}>
+            {#if creating}Creando…{:else}Crear checklist{/if}
+          </button>
+          {#if createError}<div class="error">{createError}</div>{/if}
+        </div>
+      {/if}
     </div>
   </div>
 </div>
@@ -269,11 +318,20 @@
   .loading { font-size: 14px; color: var(--light-grey); margin-top: 4px; }
   .error { color: #b91c1c; font-size: 14px; margin-top: 4px; }
   .selected-info { margin-top: 8px; font-size: 14px; color: var(--primary-blue); }
-.order-switch { position: relative; text-align: right; }
+
+  .order-switch { position: relative; text-align: right; }
   .order-btn { margin-top: 6px; padding: 4px 8px; border: 1px solid var(--primary-blue); background: var(--white); color: var(--primary-blue); border-radius: 6px; font-size: 12px; cursor: pointer; }
   .order-btn:hover { background: #f3f7fd; }
+  .order-btn.primary { background: var(--primary-blue); color: var(--white); }
+  .order-btn.primary:disabled { opacity: .7; cursor: not-allowed; }
   .order-menu { position: absolute; right: 0; top: calc(100% + 6px); background: var(--white); border: 1px solid var(--border-grey); border-radius: 6px; min-width: 240px; box-shadow: 0 8px 24px rgba(0,0,0,.08); z-index: 6000; max-height: 260px; overflow: auto; }
   .order-item { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; padding: 8px 12px; cursor: pointer; }
+  .order-item:hover, .order-item.active { background: #f3f7fd; }
+  .order-index { font-weight: 700; color: var(--primary-blue); }
+  .order-folio { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .order-date { font-size: 11px; color: var(--light-grey); }
+  .create-cta { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+
   .order-item:hover, .order-item.active { background: #f3f7fd; }
   .order-index { font-weight: 700; color: var(--primary-blue); }
   .order-folio { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

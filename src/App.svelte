@@ -1,15 +1,15 @@
 <script>
-  import { auth, clearAuth } from "./stores/auth.js";
+  import { auth } from "./stores/auth.js";
+  import { logoutDotNet } from "./api/api.js";
   import Login from "./components/Login.svelte";
 
-  // importa tus componentes existentes:
   import Header from "./components/Header.svelte";
   import Checklist from "./components/Checklist.svelte";
 </script>
 
 {#if $auth.isAuthenticated}
   <Header />
-  <button on:click={clearAuth} style="position:fixed; top:12px; right:12px;">Cerrar sesión</button>
+  <button on:click={logoutDotNet} style="position:fixed; top:12px; right:12px;">Cerrar sesión</button>
   <Checklist />
 {:else}
   <Login />

@@ -18,8 +18,10 @@
     try {
       const r = await registerUser({ username, email, password, role });
       success = "Usuario registrado. Ahora puedes iniciar sesión.";
-      // Limpia y redirige al login si quieres:
-      setTimeout(() => window.location.assign("/login"), 900);
+      // Vuelve a la vista de login en el mismo SPA (uso de hash)
+      setTimeout(() => {
+        if (location.hash) location.hash = "";
+      }, 900);
     } catch (err) {
       error = err?.message || "No se pudo registrar";
     } finally {

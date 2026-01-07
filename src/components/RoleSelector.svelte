@@ -1,5 +1,5 @@
 <script>
-  import { auth, clearAuth } from "../stores/auth.js";
+  import { auth } from "../stores/auth.js";
   import { getRoleColorByName, getRoleLabelByName } from "../stores/roleStore.js";
 
   $: me    = $auth?.me || null;
