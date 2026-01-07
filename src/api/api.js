@@ -28,7 +28,8 @@ export async function request(base, endpoint, options = {}) {
   }
 
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) clearAuth();
+    // 401 => sesión expirada: limpia auth. 403: no cerrar sesión.
+    if (res.status === 401) clearAuth();
     throw new Error(
       (typeof data === "string" ? data : data?.message) || `HTTP ${res.status}`
     );

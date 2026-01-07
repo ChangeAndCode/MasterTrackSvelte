@@ -48,7 +48,7 @@
         return item.id === 5 ? "CALIDAD_1" : "CALIDAD_2";
       case "TECNICO INSTALADOR": return "TECNICO";
       case "SOPORTE TECNICO": return "SOPORTE";
-      case "SALIDA DE MATERIAL (INSTALACION DE STOCK)": return null; // sin stepKey definido
+      case "SALIDA DE MATERIAL (INSTALACION DE STOCK)": return "SALIDA_MATERIAL";
       case "FACTURACION": return "FACTURACION";
       default: return null;
     }
@@ -58,6 +58,8 @@
   const canEditItem = (item) => {
     if (isAdmin) return true;
     const k = aspectoToStepKey(item);
+    const step = steps.find((s) => s.stepKey === k);
+    if (step?.status === "done") return false;
     return !!k && editableStepKeys.includes(k);
   };
 
@@ -233,14 +235,20 @@
                         disabled={loadingDetail}></textarea>
                     {/if}
                   {:else}
-                    <div class="calidad-label">{field.label}</div>
-                    <div class="readonly-field {item.calidad[field.key] ? 'filled' : ''}">
-                      {#if field.type === 'checkbox'}
-                        {item.calidad[field.key] ? 'Si' : 'No'}
-                      {:else}
+                    {#if field.type === 'checkbox'}
+                      <label for={controlId}>{field.label}</label>
+                      <input
+                        id={controlId}
+                        type="checkbox"
+                        checked={item.calidad[field.key]}
+                        disabled
+                        class="calidad-checkbox readonly" />
+                    {:else}
+                      <div class="calidad-label">{field.label}</div>
+                      <div class="readonly-field {item.calidad[field.key] ? 'filled' : ''}">
                         {item.calidad[field.key] || 'No especificado'}
-                      {/if}
-                    </div>
+                      </div>
+                    {/if}
                   {/if}
                 </div>
               {/each}

@@ -8,7 +8,10 @@
     sampleChecklistData,
     sampleComments,
   } from "../data/sampleData.js";
-  import { getChecklistDetail } from "../api/checklistApi.js";
+  import {
+    getChecklistDetail,
+    updateChecklistStep,
+  } from "../api/checklistApi.js";
 
   let currentChecklist = null;   // { id, folio, clientId } | null
   let detail = null;             // respuesta de GET /api/checklists/{id}
@@ -149,14 +152,86 @@
   $: editableStepKeys = detail?.editableStepKeys ?? [];
   $: stats = detail?.stats ?? { totalSteps: 0, done: 0, myPending: 0 };
 
+  // Mapea el texto visible al stepKey esperado por el backend
+  function aspectoToStepKey(item) {
+    switch (item.aspecto) {
+      case "GENERAR ORDEN DE COMPRA":
+        return "GENERAR_OC";
+      case "COORDINACION DE SERVICIOS":
+        return "COORDINACION";
+      case "PROGRAMADORES":
+        return "PROGRAMADORES";
+      case "ALMACEN":
+        return "ALMACEN";
+      case "CALIDAD":
+        return item.id === 5 ? "CALIDAD_1" : "CALIDAD_2";
+      case "TECNICO INSTALADOR":
+        return "TECNICO";
+      case "SOPORTE TECNICO":
+        return "SOPORTE";
+      case "SALIDA DE MATERIAL (INSTALACION DE STOCK)":
+        return "SALIDA_MATERIAL";
+      case "FACTURACION":
+        return "FACTURACION";
+      default:
+        return null;
+    }
+  }
+
+  const canEditStep = (item) => {
+    const stepKey = aspectoToStepKey(item);
+    return !!(stepKey && editableStepKeys.includes(stepKey));
+  };
+
+  async function persistStep(item, { warn = false } = {}) {
+    if (!checklistId) return;
+    const stepKey = aspectoToStepKey(item);
+    if (!stepKey) return;
+    if (!editableStepKeys.includes(stepKey)) return; // no intentes guardar pasos fuera del rol
+
+    // Validaciones mínimas para GENERAR_OC que exige backend
+    if (stepKey === "GENERAR_OC") {
+      const firma = (item.firmaResponsable || "").trim();
+      const fecha = item.fecha || "";
+      const folio = (item.calidad?.folio || "").trim();
+      if (!firma || !fecha || !folio) {
+        if (warn) {
+          console.warn("Faltan firma, fecha o folio para generar orden de compra.", {
+            firma,
+            fecha,
+            folio,
+          });
+        }
+        return; // no alert, evita bloqueo ni spam
+      }
+    }
+
+    const payload = {
+      status: item.completado ? "done" : "in_progress",
+      data: {
+        firmaResponsable: item.firmaResponsable,
+        fecha: item.fecha,
+        ...(item.calidad || {}),
+      },
+    };
+    try {
+      await updateChecklistStep(checklistId, stepKey, payload);
+      detail = await getChecklistDetail(checklistId);
+    } catch (err) {
+      console.error(err);
+      alert(err?.message || "No se pudo guardar el paso");
+    }
+  }
+
   // Actualizar datos del cliente
   function updateClientData(field, value) {
     clientData[field] = value;
   }
 
   // Actualizar checklist
-  function updateChecklistItem(id, field, value) {
-    const item = checklistData.find((item) => item.id === id);
+  async function updateChecklistItem(event) {
+    const { id, field, value } = event.detail || {};
+    const item = checklistData.find((it) => it.id === id);
     if (item) {
       if (field.includes(".")) {
         const [parent, child] = field.split(".");
@@ -166,6 +241,11 @@
       }
 
       checkStepCompletion(item);
+      // fuerza reactividad para progress/tabla
+      checklistData = [...checklistData];
+      if (canEditStep(item)) {
+        await persistStep(item, { warn: false });
+      }
     }
   }
 
@@ -181,12 +261,17 @@
   }
 
   // Marcar paso como completado
-  function toggleStepCompletion(id) {
-    const item = checklistData.find((item) => item.id === id);
+  async function toggleStepCompletion(event) {
+    const { id } = event.detail || {};
+    const item = checklistData.find((it) => it.id === id);
     if (item) {
       item.completado = !item.completado;
       if (item.completado && !item.fecha) {
         item.fecha = new Date().toISOString().split("T")[0];
+      }
+      checklistData = [...checklistData];
+      if (canEditStep(item)) {
+        await persistStep(item, { warn: false });
       }
     }
   }
@@ -202,6 +287,13 @@
 
   // Guardar/exportar
   function saveChecklist() {
+    // Si hay checklist activo, persistir cada paso en backend
+    if (checklistId) {
+      checklistData.forEach((it) => {
+        if (canEditStep(it)) persistStep(it, { warn: true });
+      });
+    }
+
     const data = {
       clientData,
       checklistData,
@@ -246,6 +338,21 @@
     loadingDetail = true;
     try {
       detail = await getChecklistDetail(currentChecklist.id);
+      if (detail?.steps) {
+        checklistData = checklistData.map((item) => {
+          const key = aspectoToStepKey(item);
+          const step = detail.steps.find((s) => s.stepKey === key);
+          if (!step) return item;
+          const data = step.data || {};
+          return {
+            ...item,
+            firmaResponsable: data.firmaResponsable ?? item.firmaResponsable ?? "",
+            fecha: data.fecha ?? item.fecha ?? "",
+            completado: step.status === "done" ? true : item.completado,
+            calidad: { ...item.calidad, ...data },
+          };
+        });
+      }
     } catch (err) {
       console.error(err);
       detail = null;
