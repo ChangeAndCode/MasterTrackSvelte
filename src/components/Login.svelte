@@ -37,32 +37,60 @@
   <Register />
 {:else}
   <!-- pantalla de login -->
-  <form on:submit|preventDefault={onSubmit} class="login">
-    <h1>Iniciar sesión</h1>
+  <div class="auth-container">
+    <div class="auth-card login-card">
+      <div class="auth-header">
+        <div class="logo-icon">
+          <span class="logo-m">M</span>
+          <div class="antenna"></div>
+        </div>
+        <h1>Iniciar sesión</h1>
+        <p class="auth-subtitle">Accede a tu cuenta de MasterTrack</p>
+      </div>
 
-    <label>
-      usuario
-      <input type="text" bind:value={username} required />
-    </label>
+      <form on:submit|preventDefault={onSubmit} class="login-form">
+        <div class="form-group">
+          <label for="username">Usuario</label>
+          <input 
+            id="username"
+            type="text" 
+            bind:value={username} 
+            required 
+            placeholder="Ingresa tu usuario"
+          />
+        </div>
 
-    <label>
-      Contraseña
-      <input type="password" bind:value={password} required />
-    </label>
+        <div class="form-group">
+          <label for="password">Contraseña</label>
+          <input 
+            id="password"
+            type="password" 
+            bind:value={password} 
+            required 
+            placeholder="Ingresa tu contraseña"
+          />
+        </div>
 
-    {#if error}<p class="error">{error}</p>{/if}
+        {#if error}
+          <div class="message error-message">
+            <span class="message-icon">⚠️</span>
+            <span>{error}</span>
+          </div>
+        {/if}
 
-    <a href="#/register">Crear cuenta nueva</a>
+        <button type="submit" class="btn-submit" disabled={loading}>
+          {#if loading}
+            <span class="btn-loading">⏳</span>
+            <span>Entrando...</span>
+          {:else}
+            <span>Entrar</span>
+          {/if}
+        </button>
 
-    <button type="submit" disabled={loading}>
-      {#if loading}Entrando...{/if}
-      {#if !loading}Entrar{/if}
-    </button>
-  </form>
+        <div class="auth-footer">
+          <p>¿No tienes cuenta? <a href="#/register" class="auth-link">Crear cuenta nueva</a></p>
+        </div>
+      </form>
+    </div>
+  </div>
 {/if}
-
-<style>
-  .login { max-width: 360px; margin: 40px auto; display: grid; gap: 10px;}
-  .error { color: #b00020; margin: 0; }
-  button[disabled] { opacity: .7; cursor: not-allowed; }
-</style>

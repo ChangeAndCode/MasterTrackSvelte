@@ -1,0 +1,328 @@
+/* ============================================
+   ESTILOS DE AUTENTICACIÓN (LOGIN Y REGISTER)
+   ============================================ */
+
+/* --------------------------------------------
+   CONTENEDOR Y TARJETA COMÚN
+   -------------------------------------------- */
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  padding: 20px;
+}
+
+.auth-card {
+  background-color: var(--white);
+  border: 2px solid var(--primary-blue);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 51, 102, 0.12);
+  width: 100%;
+  padding: 40px 32px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.auth-card:hover {
+  box-shadow: 0 12px 48px rgba(0, 51, 102, 0.18);
+}
+
+/* Login: tarjeta más estrecha */
+.auth-card.login-card {
+  max-width: 420px;
+}
+
+/* Register: tarjeta más ancha para más campos */
+.auth-card.register-card {
+  max-width: 480px;
+}
+
+/* --------------------------------------------
+   HEADER Y LOGO
+   -------------------------------------------- */
+.auth-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.logo-icon {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, var(--primary-blue) 50%, var(--secondary-red) 50%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  box-shadow: 0 4px 12px rgba(0, 51, 102, 0.2);
+}
+
+.logo-m {
+  color: var(--white);
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.antenna {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 14px;
+  background-color: var(--secondary-red);
+  border-radius: 2px;
+}
+
+.auth-header h1 {
+  color: var(--primary-blue);
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.auth-subtitle {
+  color: var(--light-grey);
+  font-size: 14px;
+  margin: 0;
+}
+
+/* --------------------------------------------
+   FORMULARIOS
+   -------------------------------------------- */
+.login-form,
+.register-form {
+  display: grid;
+  gap: 20px;
+}
+
+.form-group {
+  display: grid;
+  gap: 8px;
+}
+
+.form-group label {
+  color: var(--primary-blue);
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-group input,
+.form-group select {
+  padding: 14px 16px;
+  border: 2px solid var(--border-grey);
+  border-radius: 8px;
+  font-size: 15px;
+  color: var(--primary-blue);
+  background-color: var(--white);
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.1);
+}
+
+.form-group input::placeholder {
+  color: var(--light-grey);
+  opacity: 0.6;
+}
+
+.form-group select {
+  cursor: pointer;
+}
+
+.form-group select option {
+  color: var(--primary-blue);
+  padding: 8px;
+}
+
+/* --------------------------------------------
+   MENSAJES (ERROR Y ÉXITO)
+   -------------------------------------------- */
+.message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.error-message {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.success-message {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.message-icon {
+  font-size: 18px;
+}
+
+/* --------------------------------------------
+   BOTONES
+   -------------------------------------------- */
+.btn-submit {
+  padding: 14px 24px;
+  background-color: var(--primary-blue);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-submit:hover:not(:disabled) {
+  background-color: #004080;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 51, 102, 0.3);
+}
+
+.btn-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-loading {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* --------------------------------------------
+   FOOTER Y ENLACES
+   -------------------------------------------- */
+.auth-footer {
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-grey);
+}
+
+.auth-footer p {
+  color: var(--light-grey);
+  font-size: 14px;
+  margin: 0;
+}
+
+.auth-link {
+  color: var(--primary-blue);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.auth-link:hover {
+  color: var(--accent-yellow);
+  text-decoration: underline;
+}
+
+/* ============================================
+   MEDIA QUERIES - DISEÑO RESPONSIVE
+   ============================================ */
+
+/* Tablets y pantallas medianas */
+@media (max-width: 768px) {
+  .auth-container {
+    padding: 16px;
+  }
+
+  .auth-card {
+    padding: 36px 28px;
+  }
+
+  .auth-header h1 {
+    font-size: 26px;
+  }
+}
+
+/* Móviles pequeños */
+@media (max-width: 480px) {
+  .auth-container {
+    padding: 12px;
+  }
+
+  .auth-card {
+    padding: 32px 24px;
+  }
+
+  .auth-header h1 {
+    font-size: 24px;
+  }
+
+  .auth-subtitle {
+    font-size: 13px;
+  }
+
+  .form-group input,
+  .form-group select {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+
+  .btn-submit {
+    padding: 12px 20px;
+    font-size: 15px;
+  }
+
+  .logo-icon {
+    width: 50px;
+    height: 50px;
+  }
+
+  .logo-m {
+    font-size: 24px;
+  }
+}
+
+/* Móviles muy pequeños */
+@media (max-width: 360px) {
+  .auth-card {
+    padding: 24px 20px;
+  }
+
+  .auth-header h1 {
+    font-size: 22px;
+  }
+
+  .form-group {
+    gap: 6px;
+  }
+
+  .login-form,
+  .register-form {
+    gap: 16px;
+  }
+}
+

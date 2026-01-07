@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#003366;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF0000;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Cuadrado principal con gradiente -->
+  <rect x="8" y="8" width="48" height="48" rx="6" fill="url(#gradient)"/>
+  <!-- Antena -->
+  <rect x="30" y="4" width="4" height="10" rx="1" fill="#FF0000"/>
+  <!-- Letra M -->
+  <text x="32" y="42" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">M</text>
+</svg>
+

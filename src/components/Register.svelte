@@ -30,43 +30,90 @@
   }
 </script>
 
-<form on:submit|preventDefault={onSubmit} class="register">
-  <h1>Crear cuenta</h1>
+<div class="auth-container">
+  <div class="auth-card register-card">
+    <div class="auth-header">
+      <div class="logo-icon">
+        <span class="logo-m">M</span>
+        <div class="antenna"></div>
+      </div>
+      <h1>Crear cuenta</h1>
+      <p class="auth-subtitle">Únete a MasterTrack y comienza a gestionar</p>
+    </div>
 
-  <label>Usuario
-    <input type="text" bind:value={username} required maxlength="100" />
-  </label>
+    <form on:submit|preventDefault={onSubmit} class="register-form">
+      <div class="form-group">
+        <label for="username">Usuario</label>
+        <input 
+          id="username"
+          type="text" 
+          bind:value={username} 
+          required 
+          maxlength="100"
+          placeholder="Ingresa tu nombre de usuario"
+        />
+      </div>
 
-  <label>Correo
-    <input type="email" bind:value={email} required maxlength="200" />
-  </label>
+      <div class="form-group">
+        <label for="email">Correo electrónico</label>
+        <input 
+          id="email"
+          type="email" 
+          bind:value={email} 
+          required 
+          maxlength="200"
+          placeholder="tu@correo.com"
+        />
+      </div>
 
-  <label>Contraseña
-    <input type="password" bind:value={password} required minlength="6" />
-  </label>
+      <div class="form-group">
+        <label for="password">Contraseña</label>
+        <input 
+          id="password"
+          type="password" 
+          bind:value={password} 
+          required 
+          minlength="6"
+          placeholder="Mínimo 6 caracteres"
+        />
+      </div>
 
-  <label>Rol
-    <select bind:value={role} required>
-      <option value="" disabled selected>Selecciona un rol…</option>
-      {#each ROLE_OPTIONS as r}
-        <option value={r}>{ROLE_LABELS[r] ?? r}</option>
-      {/each}
-    </select>
-  </label>
+      <div class="form-group">
+        <label for="role">Rol</label>
+        <select id="role" bind:value={role} required>
+          <option value="" disabled selected>Selecciona un rol…</option>
+          {#each ROLE_OPTIONS as r}
+            <option value={r}>{ROLE_LABELS[r] ?? r}</option>
+          {/each}
+        </select>
+      </div>
 
-  {#if error}<p class="error">{error}</p>{/if}
-  {#if success}<p class="ok">{success}</p>{/if}
+      {#if error}
+        <div class="message error-message">
+          <span class="message-icon">⚠️</span>
+          <span>{error}</span>
+        </div>
+      {/if}
 
-  <button type="submit" disabled={loading}>
-    {#if loading}Creando…{/if}{#if !loading}Crear cuenta{/if}
-  </button>
-</form>
+      {#if success}
+        <div class="message success-message">
+          <span class="message-icon">✅</span>
+          <span>{success}</span>
+        </div>
+      {/if}
 
-<style>
-  .register{max-width:420px;margin:4rem auto;padding:1.25rem;border:1px solid #eee;border-radius:12px;display:grid;gap:.75rem}
-  label{display:grid;gap:.35rem}
-  input,select{padding:.6rem .7rem;border:1px solid #ccc;border-radius:8px}
-  .error{color:#b00020;margin:.25rem 0}
-  .ok{color:#177245;margin:.25rem 0}
-  button[disabled]{opacity:.7;cursor:not-allowed}
-</style>
+      <button type="submit" class="btn-submit" disabled={loading}>
+        {#if loading}
+          <span class="btn-loading">⏳</span>
+          <span>Creando cuenta...</span>
+        {:else}
+          <span>Crear cuenta</span>
+        {/if}
+      </button>
+
+      <div class="auth-footer">
+        <p>¿Ya tienes cuenta? <a href="#" class="auth-link" on:click|preventDefault={() => location.hash = ""}>Iniciar sesión</a></p>
+      </div>
+    </form>
+  </div>
+</div>
