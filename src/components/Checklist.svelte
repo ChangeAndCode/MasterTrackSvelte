@@ -257,7 +257,10 @@
       typeof val === "boolean" ? val : typeof val === "string" && val.trim() !== ""
     );
 
-    item.completado = hasSignature && hasDate && hasCalidadData;
+    // No marcar como completado automáticamente; solo mantener true si ya estaba y aún cumple
+    if (item.completado) {
+      item.completado = hasSignature && hasDate && hasCalidadData;
+    }
   }
 
   // Marcar paso como completado
