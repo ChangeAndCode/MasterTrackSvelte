@@ -9,6 +9,7 @@ export const ROLE_OPTIONS = [
   "Soporte Tecnico",
   "Facturacion",
   "Administrador",
+  "Salida de Material",  
 ];
 
 export const ROLE_LABELS = {
@@ -21,4 +22,5 @@ export const ROLE_LABELS = {
   "Soporte Tecnico": "Soporte Tecnico",
   Facturacion: "Facturacion",
   Administrador: "Administrador",
+  "Salida de Material": "Salida de Material",
 };
