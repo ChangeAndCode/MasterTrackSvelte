@@ -3,6 +3,8 @@
   import ChecklistHeader from "./ChecklistHeader.svelte";
   import ProcessStats from "./ProcessStats.svelte";
   import RoleSelector from "./RoleSelector.svelte";
+  import { auth } from "../stores/auth.js";
+  import { normalizeRoleKey, roles } from "../stores/roleStore.js";
   import {
     sampleClientData,
     sampleChecklistData,
@@ -13,9 +15,12 @@
     updateChecklistStep,
   } from "../api/checklistApi.js";
 
-  let currentChecklist = null;   // { id, folio, clientId } | null
+  let currentChecklist = null;   // { id, folio, clientId, client } | null
+  let selectedClient = null;      // Cliente seleccionado del buscador
   let detail = null;             // respuesta de GET /api/checklists/{id}
   let loadingDetail = false;
+  let savingSteps = new Set();   // IDs de pasos que se están guardando actualmente
+  let savingStepsArray = [];     // Array reactivo para pasar a ChecklistTable
 
   // Datos del checklist basados en el formulario
   let clientData = {
@@ -32,15 +37,15 @@
       fecha: "",
       completado: false,
       calidad: {
-        datosCte: false,
+        datosCte: null, // No se guarda, solo se muestra del cliente
         checklist: false,
         comodato: false,
         garantia: false,
         cortesia: false,
         demo: false,
-        precioRenta: false,
+        precioRenta: "", // Campo de moneda (string)
+        seguimiento: false,
         folio: "",
-        numProgServ: "",
       },
     },
     {
@@ -50,8 +55,9 @@
       fecha: "",
       completado: false,
       calidad: {
-        validado: false,
-        valido: false,
+        estadoValidacion: "", // "validado" | "rechazado" | ""
+        numProgServ: "",
+        motivoRechazo: "",
       },
     },
     {
@@ -61,8 +67,9 @@
       fecha: "",
       completado: false,
       calidad: {
-        ids: false,
-        valido: false,
+        ids: "", // IDs de dispositivos (texto, uno por línea)
+        estadoValidacion: "", // "valido" | "invalido" | ""
+        comentarios: "", // Comentarios si está inválido
       },
     },
     {
@@ -72,9 +79,9 @@
       fecha: "",
       completado: false,
       calidad: {
-        matCompleto: false,
+        matCompleto: "", // "completo" | "incompleto" | ""
         numVale: "",
-        hojaSalida: false,
+        hojaSalida: "",
       },
     },
     {
@@ -84,7 +91,9 @@
       fecha: "",
       completado: false,
       calidad: {
-        observaciones: "",
+        estadoValidacion: "", // "valido" | "invalido" | ""
+        comentarios: "", // Comentarios si está inválido
+        observaciones: "", // Observaciones siempre visibles
       },
     },
     {
@@ -93,7 +102,10 @@
       firmaResponsable: "",
       fecha: "",
       completado: false,
-      calidad: {},
+      calidad: {
+        comentarios: "", // Comentarios desde app móvil (readonly)
+        evidencias: [], // Array de URLs de fotos de evidencias
+      },
     },
     {
       id: 7,
@@ -102,9 +114,7 @@
       fecha: "",
       completado: false,
       calidad: {
-        procesada: false,
-        pruebas: false,
-        notificacionCliente: false,
+        tareas: [], // Array de tareas de soporte
       },
     },
     {
@@ -114,7 +124,9 @@
       fecha: "",
       completado: false,
       calidad: {
-        observaciones: "",
+        estadoValidacion: "", // "valido" | "invalido" | ""
+        comentarios: "", // Comentarios si está inválido
+        observaciones: "", // Observaciones siempre visibles
       },
     },
     {
@@ -133,11 +145,18 @@
       firmaResponsable: "",
       fecha: "",
       completado: false,
-      calidad: {},
+      calidad: {
+        estadoPago: "", // "pagado" | "pagos_parciales" | "pendiente"
+        fechaPago: "", // Fecha si está pagado completamente
+        fechasPagosParciales: [], // Array de objetos {fecha, monto} si hay pagos parciales
+        folioFactura: "", // Solo si está pagado
+        subtotal: "", // Monto subtotal
+        iva: "", // Monto IVA
+        total: "", // Monto total
+      },
     },
   ];
 
-  let comentarios = "";
   let progress = 0;
 
   // Calcular progreso
@@ -180,7 +199,20 @@
 
   const canEditStep = (item) => {
     const stepKey = aspectoToStepKey(item);
-    return !!(stepKey && editableStepKeys.includes(stepKey));
+    // Verificar primero en editableStepKeys del backend
+    if (stepKey && editableStepKeys.includes(stepKey)) return true;
+    
+    // Si no está en editableStepKeys, verificar permisos del rol como respaldo
+    // Esto es útil cuando el backend aún no ha actualizado los permisos
+    if (stepKey && $auth?.me?.role) {
+      const roleKey = normalizeRoleKey($auth.me.role);
+      const role = roles[roleKey];
+      if (role && role.permissions && role.permissions.includes(item.aspecto)) {
+        return true;
+      }
+    }
+    
+    return false;
   };
 
   async function persistStep(item, { warn = false } = {}) {
@@ -188,6 +220,15 @@
     const stepKey = aspectoToStepKey(item);
     if (!stepKey) return;
     if (!editableStepKeys.includes(stepKey)) return; // no intentes guardar pasos fuera del rol
+
+    // Prevenir guardados duplicados
+    if (savingSteps.has(item.id)) {
+      console.log(`Paso ${item.id} ya se está guardando, omitiendo...`);
+      return;
+    }
+    
+    // Actualizar array reactivo
+    savingStepsArray = Array.from(savingSteps);
 
     // Validaciones mínimas para GENERAR_OC que exige backend
     if (stepKey === "GENERAR_OC") {
@@ -206,21 +247,52 @@
       }
     }
 
+    // Verificar si el paso está completo antes de guardar
+    checkStepCompletion(item);
+
+    // Excluir datosCte del payload ya que es solo para mostrar (viene del cliente seleccionado)
+    const calidadData = { ...(item.calidad || {}) };
+    delete calidadData.datosCte;
+    
     const payload = {
       status: item.completado ? "done" : "in_progress",
       data: {
         firmaResponsable: item.firmaResponsable,
         fecha: item.fecha,
-        ...(item.calidad || {}),
+        ...calidadData,
       },
     };
+    
+    // Marcar como guardando
+    savingSteps.add(item.id);
+    savingStepsArray = Array.from(savingSteps);
+    
     try {
       await updateChecklistStep(checklistId, stepKey, payload);
+      // Recargar detalles del backend para sincronizar
       detail = await getChecklistDetail(checklistId);
+      
+      // Actualizar el estado local basado en la respuesta del backend
+      if (detail?.steps) {
+        const step = detail.steps.find((s) => s.stepKey === stepKey);
+        if (step) {
+          const updatedItem = checklistData.find((it) => it.id === item.id);
+          if (updatedItem) {
+            updatedItem.completado = step.status === "done";
+            // Forzar reactividad
+            checklistData = [...checklistData];
+          }
+        }
+      }
     } catch (err) {
       console.error(err);
       alert(err?.message || "No se pudo guardar el paso");
+      // Remover del set de guardando inmediatamente en caso de error
+      savingSteps.delete(item.id);
+      savingStepsArray = Array.from(savingSteps);
     }
+    // Nota: No removemos de savingSteps aquí en el finally para que el botón
+    // permanezca bloqueado hasta después del alert de éxito en handleSaveStep
   }
 
   // Actualizar datos del cliente
@@ -240,10 +312,26 @@
         item[field] = value;
       }
 
+      // Si es COORDINACION DE SERVICIOS, PROGRAMADORES, ALMACEN, CALIDAD, TECNICO INSTALADOR, SOPORTE TECNICO o SALIDA DE MATERIAL y se actualiza la fecha, asegurar que tenga firma
+      if ((item.aspecto === "COORDINACION DE SERVICIOS" || item.aspecto === "PROGRAMADORES" || item.aspecto === "ALMACEN" || (item.aspecto === "CALIDAD" && (item.id === 5 || item.id === 8)) || item.aspecto === "TECNICO INSTALADOR" || item.aspecto === "SOPORTE TECNICO" || item.aspecto === "SALIDA DE MATERIAL (INSTALACION DE STOCK)") && field === "fecha" && !item.firmaResponsable && $auth?.me?.username) {
+        item.firmaResponsable = $auth.me.username;
+      }
+
       checkStepCompletion(item);
       // fuerza reactividad para progress/tabla
       checklistData = [...checklistData];
-      if (canEditStep(item)) {
+      
+      // NO guardar automáticamente para ALMACEN, CALIDAD (id 5 y id 8), TECNICO INSTALADOR, SOPORTE TECNICO, SALIDA DE MATERIAL y FACTURACION
+      // Estos solo se guardan cuando se presiona el botón de guardar
+      const shouldAutoSave = canEditStep(item) && 
+                             item.aspecto !== "ALMACEN" && 
+                             !(item.aspecto === "CALIDAD" && (item.id === 5 || item.id === 8)) &&
+                             item.aspecto !== "TECNICO INSTALADOR" &&
+                             item.aspecto !== "SOPORTE TECNICO" &&
+                             item.aspecto !== "SALIDA DE MATERIAL (INSTALACION DE STOCK)" &&
+                             item.aspecto !== "FACTURACION";
+      
+      if (shouldAutoSave) {
         await persistStep(item, { warn: false });
       }
     }
@@ -253,14 +341,86 @@
   function checkStepCompletion(item) {
     const hasSignature = item.firmaResponsable.trim() !== "";
     const hasDate = item.fecha !== "";
-    const hasCalidadData = Object.values(item.calidad).some((val) =>
-      typeof val === "boolean" ? val : typeof val === "string" && val.trim() !== ""
-    );
-
-    // No marcar como completado automáticamente; solo mantener true si ya estaba y aún cumple
-    if (item.completado) {
-      item.completado = hasSignature && hasDate && hasCalidadData;
+    
+    // Validar campos de calidad según el tipo de paso
+    let hasCalidadData = false;
+    const calidad = item.calidad || {};
+    
+    if (item.aspecto === "GENERAR ORDEN DE COMPRA") {
+      // Requiere folio y al menos algunos campos de calidad
+      hasCalidadData = (calidad.folio || "").trim() !== "";
+    } else if (item.aspecto === "COORDINACION DE SERVICIOS") {
+      // Requiere estado de validación y número de programación
+      hasCalidadData = (calidad.estadoValidacion || "").trim() !== "" && 
+                       (calidad.numProgServ || "").trim() !== "";
+      // Si está rechazado, también requiere motivo
+      if (calidad.estadoValidacion === "rechazado") {
+        hasCalidadData = hasCalidadData && (calidad.motivoRechazo || "").trim() !== "";
+      }
+    } else if (item.aspecto === "PROGRAMADORES") {
+      // Requiere IDs y estado
+      hasCalidadData = (calidad.ids || "").trim() !== "" && 
+                       (calidad.estadoValidacion || "").trim() !== "";
+      // Si está inválido, también requiere comentarios
+      if (calidad.estadoValidacion === "invalido") {
+        hasCalidadData = hasCalidadData && (calidad.comentarios || "").trim() !== "";
+      }
+    } else if (item.aspecto === "ALMACEN") {
+      // Requiere estado de material completo, número de vale y hoja de salida
+      hasCalidadData = (calidad.matCompleto || "").trim() !== "" && 
+                       (calidad.numVale || "").trim() !== "" &&
+                       (calidad.hojaSalida || "").trim() !== "";
+    } else if (item.aspecto === "TECNICO INSTALADOR") {
+      // Requiere fecha de instalación (los comentarios y evidencias vienen de la app móvil)
+      hasCalidadData = true; // Solo requiere fecha y firma, los demás datos vienen de la app móvil
+    } else if (item.aspecto === "SOPORTE TECNICO") {
+      // Requiere al menos una tarea de soporte
+      hasCalidadData = Array.isArray(calidad.tareas) && calidad.tareas.length > 0;
+    } else if (item.aspecto === "CALIDAD" && (item.id === 5 || item.id === 8)) {
+      // Requiere estado de validación y observaciones (para ambas instancias de CALIDAD)
+      hasCalidadData = (calidad.estadoValidacion || "").trim() !== "" && 
+                       (calidad.observaciones || "").trim() !== "";
+      // Si está inválido, también requiere comentarios
+      if (calidad.estadoValidacion === "invalido") {
+        hasCalidadData = hasCalidadData && (calidad.comentarios || "").trim() !== "";
+      }
+    } else if (item.aspecto === "SALIDA DE MATERIAL (INSTALACION DE STOCK)") {
+      // Requiere fecha, firma y número de hoja de salida
+      hasCalidadData = (item.fecha || "").trim() !== "" && 
+                       (item.firmaResponsable || "").trim() !== "" &&
+                       (calidad.hojaSalida || "").trim() !== "";
+    } else if (item.aspecto === "FACTURACION") {
+      // Requiere estado de pago y montos (IVA se calcula automáticamente)
+      hasCalidadData = (calidad.estadoPago || "").trim() !== "" &&
+                       (calidad.subtotal || "").trim() !== "" &&
+                       parseFloat(calidad.subtotal || 0) > 0;
+      // Si está pagado, requiere fecha de pago y folio
+      if (calidad.estadoPago === "pagado") {
+        hasCalidadData = hasCalidadData && 
+                         (calidad.fechaPago || "").trim() !== "" &&
+                         (calidad.folioFactura || "").trim() !== "";
+      }
+      // Si está en pagos parciales, requiere al menos un pago con fecha y monto
+      if (calidad.estadoPago === "pagos_parciales") {
+        hasCalidadData = hasCalidadData && 
+                         Array.isArray(calidad.fechasPagosParciales) &&
+                         calidad.fechasPagosParciales.length > 0 &&
+                         calidad.fechasPagosParciales.some(p => {
+                           if (typeof p === 'object') {
+                             return (p.fecha && p.fecha.trim() !== '') && (p.monto && parseFloat(p.monto) > 0);
+                           }
+                           return p && p.trim() !== "";
+                         });
+      }
+    } else {
+      // Para otros pasos, verificar que haya algún dato en calidad
+      hasCalidadData = Object.values(calidad).some((val) =>
+        typeof val === "boolean" ? val : typeof val === "string" && val.trim() !== ""
+      );
     }
+
+    // Marcar como completado si tiene todos los campos requeridos
+    item.completado = hasSignature && hasDate && hasCalidadData;
   }
 
   // Marcar paso como completado
@@ -279,12 +439,229 @@
     }
   }
 
+  // Guardar paso específico (desde botón de guardar)
+  async function handleSaveStep(event) {
+    const { id } = event.detail || {};
+    const item = checklistData.find((it) => it.id === id);
+    if (item && canEditStep(item)) {
+      // Si es COORDINACION DE SERVICIOS, asegurar que tenga fecha y firma
+      if (item.aspecto === "COORDINACION DE SERVICIOS") {
+        if (!item.fecha) {
+          item.fecha = new Date().toISOString().split("T")[0];
+        }
+        if (!item.firmaResponsable && $auth?.me?.username) {
+          item.firmaResponsable = $auth.me.username;
+        }
+        // Validar que tenga estado de validación
+        if (!item.calidad?.estadoValidacion) {
+          alert("Por favor seleccione un estado (Validado o Rechazado)");
+          return;
+        }
+        // Si está rechazado, validar que tenga motivo
+        if (item.calidad.estadoValidacion === "rechazado" && !item.calidad.motivoRechazo?.trim()) {
+          alert("Por favor especifique el motivo de rechazo");
+          return;
+        }
+      }
+      
+      // Si es PROGRAMADORES, asegurar que tenga fecha y firma
+      if (item.aspecto === "PROGRAMADORES") {
+        if (!item.fecha) {
+          item.fecha = new Date().toISOString().split("T")[0];
+        }
+        if (!item.firmaResponsable && $auth?.me?.username) {
+          item.firmaResponsable = $auth.me.username;
+        }
+        // Validar que tenga IDs
+        if (!item.calidad?.ids?.trim()) {
+          alert("Por favor ingrese los IDs de los dispositivos");
+          return;
+        }
+        // Validar que tenga estado de validación
+        if (!item.calidad?.estadoValidacion) {
+          alert("Por favor seleccione un estado (Válido o Inválido)");
+          return;
+        }
+        // Si está inválido, validar que tenga comentarios
+        if (item.calidad.estadoValidacion === "invalido" && !item.calidad.comentarios?.trim()) {
+          alert("Por favor especifique los comentarios del motivo de invalidez");
+          return;
+        }
+      }
+      
+      // Si es ALMACEN, asegurar que tenga fecha y firma
+      if (item.aspecto === "ALMACEN") {
+        if (!item.fecha) {
+          item.fecha = new Date().toISOString().split("T")[0];
+        }
+        if (!item.firmaResponsable && $auth?.me?.username) {
+          item.firmaResponsable = $auth.me.username;
+        }
+        // Validar que tenga estado de material completo
+        if (!item.calidad?.matCompleto) {
+          alert("Por favor seleccione el estado del material (Completo o Incompleto)");
+          return;
+        }
+        // Validar que tenga número de vale
+        if (!item.calidad?.numVale?.trim()) {
+          alert("Por favor ingrese el número de vale");
+          return;
+        }
+        // Validar que tenga número de hoja de salida
+        if (!item.calidad?.hojaSalida?.trim()) {
+          alert("Por favor ingrese el número de hoja de salida");
+          return;
+        }
+      }
+      
+      // Si es CALIDAD (primera o segunda instancia - id 5 o id 8), asegurar que tenga fecha y firma
+      if (item.aspecto === "CALIDAD" && (item.id === 5 || item.id === 8)) {
+        if (!item.fecha) {
+          item.fecha = new Date().toISOString().split("T")[0];
+        }
+        if (!item.firmaResponsable && $auth?.me?.username) {
+          item.firmaResponsable = $auth.me.username;
+        }
+        // Validar que tenga estado de validación
+        if (!item.calidad?.estadoValidacion) {
+          alert("Por favor seleccione un estado (Válido o Inválido)");
+          return;
+        }
+        // Validar que tenga observaciones
+        if (!item.calidad?.observaciones?.trim()) {
+          alert("Por favor ingrese las observaciones");
+          return;
+        }
+        // Si está inválido, validar que tenga comentarios
+        if (item.calidad.estadoValidacion === "invalido" && !item.calidad.comentarios?.trim()) {
+          alert("Por favor especifique los comentarios del motivo de invalidez");
+          return;
+        }
+      }
+      
+      // Si es TECNICO INSTALADOR, asegurar que tenga fecha y firma
+      if (item.aspecto === "TECNICO INSTALADOR") {
+        if (!item.fecha) {
+          alert("Por favor seleccione la fecha de instalación");
+          return;
+        }
+        if (!item.firmaResponsable && $auth?.me?.username) {
+          item.firmaResponsable = $auth.me.username;
+        }
+        // Los comentarios y evidencias vienen de la app móvil, no se validan aquí
+      }
+
+      // Si es SOPORTE TECNICO, asegurar que tenga fecha, firma y al menos una tarea
+      if (item.aspecto === "SOPORTE TECNICO") {
+        if (!item.fecha) {
+          alert("Por favor seleccione la fecha");
+          return;
+        }
+        if (!item.firmaResponsable && $auth?.me?.username) {
+          item.firmaResponsable = $auth.me.username;
+        }
+        if (!item.calidad?.tareas || item.calidad.tareas.length === 0) {
+          alert("Por favor agregue al menos una tarea de soporte");
+          return;
+        }
+      }
+
+      // Si es SALIDA DE MATERIAL, asegurar que tenga fecha, firma y número de hoja de salida
+      if (item.aspecto === "SALIDA DE MATERIAL (INSTALACION DE STOCK)") {
+        if (!item.fecha) {
+          alert("Por favor seleccione la fecha");
+          return;
+        }
+        if (!item.firmaResponsable && $auth?.me?.username) {
+          item.firmaResponsable = $auth.me.username;
+        }
+        if (!item.calidad?.hojaSalida?.trim()) {
+          alert("Por favor ingrese el número de hoja de salida");
+          return;
+        }
+      }
+
+      // Si es FACTURACION, validar campos según el estado de pago
+      if (item.aspecto === "FACTURACION") {
+        if (!item.calidad?.estadoPago) {
+          alert("Por favor seleccione el estado de pago");
+          return;
+        }
+        if (!item.calidad?.subtotal || parseFloat(item.calidad.subtotal) <= 0) {
+          alert("Por favor ingrese el subtotal");
+          return;
+        }
+        // Calcular IVA automáticamente si no está calculado
+        if (!item.calidad.iva || parseFloat(item.calidad.iva) === 0) {
+          const subtotal = parseFloat(item.calidad.subtotal || 0);
+          const iva = subtotal * 0.16;
+          item.calidad.iva = iva.toFixed(2);
+          const total = subtotal + iva;
+          item.calidad.total = total.toFixed(2);
+        }
+        if (item.calidad.estadoPago === "pagado") {
+          if (!item.calidad?.fechaPago?.trim()) {
+            alert("Por favor seleccione la fecha de pago");
+            return;
+          }
+          if (!item.calidad?.folioFactura?.trim()) {
+            alert("Por favor ingrese el folio de factura");
+            return;
+          }
+        }
+        if (item.calidad.estadoPago === "pagos_parciales") {
+          if (!item.calidad?.fechasPagosParciales || 
+              !Array.isArray(item.calidad.fechasPagosParciales) ||
+              item.calidad.fechasPagosParciales.length === 0 ||
+              !item.calidad.fechasPagosParciales.some(p => {
+                if (typeof p === 'object') {
+                  return (p.fecha && p.fecha.trim() !== '') && (p.monto && parseFloat(p.monto) > 0);
+                }
+                return p && p.trim() !== "";
+              })) {
+            alert("Por favor agregue al menos un pago parcial con fecha y monto");
+            return;
+          }
+        }
+      }
+      
+      // Verificar completitud antes de guardar
+      checkStepCompletion(item);
+      // Forzar reactividad para actualizar progreso
+      checklistData = [...checklistData];
+      
+      await persistStep(item, { warn: true });
+      
+      // Verificar completitud después de guardar (por si cambió algo)
+      checkStepCompletion(item);
+      checklistData = [...checklistData];
+      
+      // Mostrar confirmación visual según la sección
+      const messages = {
+        "GENERAR ORDEN DE COMPRA": "Orden de compra guardada exitosamente",
+        "COORDINACION DE SERVICIOS": "Coordinación de servicios guardada exitosamente",
+        "PROGRAMADORES": "Programación guardada exitosamente",
+        "ALMACEN": "Almacén guardado exitosamente",
+        "CALIDAD": "Calidad guardada exitosamente",
+        "TECNICO INSTALADOR": "Instalación guardada exitosamente",
+        "SOPORTE TECNICO": "Soporte técnico guardado exitosamente",
+        "SALIDA DE MATERIAL (INSTALACION DE STOCK)": "Salida de material guardada exitosamente",
+        "FACTURACION": "Facturación guardada exitosamente"
+      };
+      alert(messages[item.aspecto] || "Datos guardados exitosamente");
+      
+      // Remover del set de guardando después del alert para desbloquear el botón
+      // Esto previene guardados duplicados al mantener el botón bloqueado durante el proceso completo
+      savingSteps.delete(item.id);
+      savingStepsArray = Array.from(savingSteps);
+    }
+  }
+
   // Cargar datos de ejemplo
   function loadSampleData() {
     if (confirm("¿Cargar datos de ejemplo? Esto reemplazará los datos actuales.")) {
       clientData = { ...sampleClientData };
       checklistData = JSON.parse(JSON.stringify(sampleChecklistData));
-      comentarios = sampleComments;
     }
   }
 
@@ -300,7 +677,6 @@
     const data = {
       clientData,
       checklistData,
-      comentarios,
       progress,
       timestamp: new Date().toISOString(),
     };
@@ -328,12 +704,15 @@
         }, {}),
       }));
 
-      comentarios = "";
     }
   }
 
   async function onSelectChecklist(e) {
     currentChecklist = e.detail; // puede ser null
+    // Guardar cliente seleccionado (puede venir con el checklist o estar disponible)
+    if (e.detail?.client) {
+      selectedClient = e.detail.client;
+    }
     if (!currentChecklist?.id) {
       detail = null;
       return;
@@ -377,7 +756,10 @@
 
     <RoleSelector />
 
-    <ChecklistHeader on:selectChecklist={onSelectChecklist} />
+    <ChecklistHeader 
+      on:selectChecklist={onSelectChecklist}
+      on:selectClient={(e) => selectedClient = e.detail}
+    />
 
     <ProcessStats {checklistData} {clientData} />
 
@@ -402,18 +784,13 @@
       {stats}
       {loadingDetail}
       {checklistData}
+      {selectedClient}
+      savingSteps={savingStepsArray}
       on:update={updateChecklistItem}
       on:toggle={toggleStepCompletion}
+      on:saveStep={handleSaveStep}
     />
 
-    <div class="comments-section">
-      <h3>COMENTARIOS</h3>
-      <textarea
-        bind:value={comentarios}
-        placeholder="Ingrese comentarios adicionales..."
-        rows="4"
-      ></textarea>
-    </div>
 
     <div class="actions">
       <button class="btn btn-outline" on:click={loadSampleData}>
@@ -495,26 +872,6 @@
     margin: 30px 0;
   }
 
-  .comments-section h3 {
-    color: var(--primary-blue);
-    margin-bottom: 15px;
-    font-size: 18px;
-  }
-
-  .comments-section textarea {
-    width: 100%;
-    padding: 15px;
-    border: 2px solid var(--border-grey);
-    border-radius: 8px;
-    font-family: inherit;
-    font-size: 14px;
-    resize: vertical;
-  }
-
-  .comments-section textarea:focus {
-    outline: none;
-    border-color: var(--primary-blue);
-  }
 
   .actions {
     display: flex;

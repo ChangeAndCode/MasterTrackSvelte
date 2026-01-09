@@ -40,7 +40,7 @@
   $: dispatch(
     "selectChecklist",
     activeChecklist
-      ? { id: activeChecklist.id, folio: activeChecklist.folio, clientId: selectedClient?.id }
+      ? { id: activeChecklist.id, folio: activeChecklist.folio, clientId: selectedClient?.id, client: selectedClient }
       : null
   );
   $: me = $auth?.me || null;

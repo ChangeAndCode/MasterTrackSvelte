@@ -12,15 +12,15 @@ export const sampleChecklistData = [
     fecha: "2024-01-15",
     completado: true,
     calidad: {
-      datosCte: true,
+      datosCte: null, // No se guarda, solo se muestra del cliente
       checklist: true,
       comodato: true,
       garantia: true,
       cortesia: false,
       demo: true,
-      precioRenta: true,
+      precioRenta: "15000.00", // Campo de moneda
+      seguimiento: true,
       folio: "FOL-001",
-      numProgServ: "SERV-001",
     },
   },
   {
@@ -30,8 +30,9 @@ export const sampleChecklistData = [
     fecha: "2024-01-16",
     completado: true,
     calidad: {
-      validado: true,
-      valido: true,
+      estadoValidacion: "validado",
+      numProgServ: "PROG-001",
+      motivoRechazo: "",
     },
   },
   {
@@ -41,8 +42,9 @@ export const sampleChecklistData = [
     fecha: "2024-01-17",
     completado: true,
     calidad: {
-      ids: true,
-      valido: true,
+      ids: "ID001\nID002\nID003",
+      estadoValidacion: "valido",
+      comentarios: "",
     },
   },
   {
@@ -52,9 +54,9 @@ export const sampleChecklistData = [
     fecha: "2024-01-18",
     completado: true,
     calidad: {
-      matCompleto: true,
+      matCompleto: "completo",
       numVale: "VALE-001",
-      hojaSalida: true,
+      hojaSalida: "HOJA-001",
     },
   },
   {
@@ -64,6 +66,8 @@ export const sampleChecklistData = [
     fecha: "2024-01-19",
     completado: true,
     calidad: {
+      estadoValidacion: "valido",
+      comentarios: "",
       observaciones: "Material verificado y aprobado",
     },
   },
@@ -73,7 +77,14 @@ export const sampleChecklistData = [
     firmaResponsable: "Roberto Silva",
     fecha: "2024-01-20",
     completado: false,
-    calidad: {},
+    calidad: {
+      comentarios: "La batería cuenta con solo la tapa protectora del polo positivo.",
+      evidencias: [
+        { url: "https://via.placeholder.com/400x300?text=Interior", label: "Interior" },
+        { url: "https://via.placeholder.com/400x300?text=Bateria", label: "Batería" },
+        { url: "https://via.placeholder.com/400x300?text=Instalacion", label: "Instalación GPS" }
+      ],
+    },
   },
   {
     id: 7,
@@ -82,9 +93,7 @@ export const sampleChecklistData = [
     fecha: "",
     completado: false,
     calidad: {
-      procesada: false,
-      pruebas: false,
-      notificacionCliente: false,
+      tareas: [],
     },
   },
   {
@@ -94,7 +103,9 @@ export const sampleChecklistData = [
     fecha: "",
     completado: false,
     calidad: {
-      observaciones: "",
+      estadoValidacion: "", // "valido" | "invalido" | ""
+      comentarios: "", // Comentarios si está inválido
+      observaciones: "", // Observaciones siempre visibles
     },
   },
   {

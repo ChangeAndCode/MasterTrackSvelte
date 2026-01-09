@@ -1,6 +1,10 @@
 // src/api/checklistApi.js
 import { request } from "./api.js";
-const BASE = (import.meta.env.VITE_MTAPI_BASE || "").replace(/\/$/, "");
+// En desarrollo, usa el proxy de Vite para evitar CORS
+const isDev = import.meta.env.DEV;
+const BASE = isDev 
+  ? "/mt-api"  // Proxy de Vite en desarrollo
+  : (import.meta.env.VITE_MTAPI_BASE || "").replace(/\/$/, "");
 
 // ---- Clients
 export function searchClients(q = "", take = 10) {

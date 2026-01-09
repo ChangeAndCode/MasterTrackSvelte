@@ -17,7 +17,7 @@ export const roles = {
   },
   ALMACEN: {
     name: "Almacen",
-    permissions: ["ALMACEN"],
+    permissions: ["ALMACEN", "SALIDA DE MATERIAL (INSTALACION DE STOCK)"],
     color: "#96CEB4",
   },
   CALIDAD: {
